@@ -1,0 +1,20 @@
+{
+  "name": "ssh-todolist-app",
+  "version": "0.01.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js frontend/api.js frontend/offline.js frontend/realtime.js frontend/state.js frontend/ui.js",
+    "test": "node --test tests/frontend_offline.test.mjs",
+    "web:serve": "node scripts/serve_web.mjs",
+    "mobile:prepare": "node scripts/prepare_mobile.mjs",
+    "android:add": "npm run mobile:prepare && npx cap add android",
+    "android:sync": "npm run mobile:prepare && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0"
+  }
+}

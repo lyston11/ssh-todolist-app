@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Focus List</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">Focus List</p>
+        <h1>把零散的事情，收进一个清爽的清单里。</h1>
+        <p class="hero-copy">
+          一个通过 Tailscale 局域网同步的 todolist。把服务运行在一台设备上，其他设备直接访问同一个地址。
+        </p>
+      </header>
+
+      <main class="app-card" aria-label="Todo 应用">
+        <section class="connection-panel" data-mobile-view="settings" aria-label="同步节点设置">
+          <form id="connection-form" class="connection-form">
+            <div class="connection-copy">
+              <p class="connection-label">同步节点</p>
+              <p class="connection-hint">填写 Tailscale IP 或 MagicDNS 地址，再输入后端 token，例如 `http://100.x.x.x:8000`。</p>
+            </div>
+            <label class="sr-only" for="server-url-input">同步节点地址</label>
+            <input
+              id="server-url-input"
+              name="serverUrl"
+              type="url"
+              inputmode="url"
+              placeholder="http://100.x.x.x:8000"
+              autocomplete="off"
+            />
+            <label class="sr-only" for="server-token-input">访问令牌</label>
+            <input
+              id="server-token-input"
+              name="serverToken"
+              type="password"
+              placeholder="输入服务端 token"
+              autocomplete="off"
+            />
+            <div class="connection-actions">
+              <button type="submit">连接节点</button>
+              <button id="test-server-url" class="ghost-button" type="button">测试连接</button>
+              <button id="reset-server-url" class="ghost-button" type="button">恢复默认</button>
+            </div>
+          </form>
+          <p id="connection-message" class="connection-message" aria-live="polite"></p>
+        </section>
+
+        <section class="composer" data-mobile-view="tasks" aria-label="创建任务">
+          <form id="todo-form" class="todo-form">
+            <label class="sr-only" for="todo-input">输入任务</label>
+            <input
+              id="todo-input"
+              name="todo"
+              type="text"
+              maxlength="120"
+              placeholder="例如：完成 SSH 登录页原型"
+              autocomplete="off"
+              required
+            />
+            <button type="submit">添加任务</button>
+          </form>
+        </section>
+
+        <section class="toolbar" data-mobile-view="tasks" aria-label="筛选与统计">
+          <div class="filters" role="tablist" aria-label="任务筛选">
+            <button class="filter is-active" data-filter="all" type="button">全部</button>
+            <button class="filter" data-filter="active" type="button">进行中</button>
+            <button class="filter" data-filter="completed" type="button">已完成</button>
+          </div>
+          <div class="summary">
+            <span id="sync-status" class="sync-status">正在连接同步服务</span>
+            <span id="sync-queue-status" class="sync-queue-status">0 个待同步操作</span>
+            <span id="todo-count">0 个待完成</span>
+            <button id="clear-completed" class="ghost-button" type="button">
+              清除已完成
+            </button>
+          </div>
+        </section>
+
+        <section class="lists-panel" data-mobile-view="tasks" aria-label="清单管理">
+          <div class="lists-header">
+            <div>
+              <p class="lists-label">清单</p>
+              <p class="lists-hint">把待办按项目或场景分开管理。</p>
+            </div>
+            <button id="add-list-button" class="ghost-button" type="button">新建清单</button>
+          </div>
+          <div id="lists-tabs" class="lists-tabs" role="tablist" aria-label="清单切换"></div>
+        </section>
+
+        <section class="todo-panel" data-mobile-view="tasks">
+          <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
+          <div id="empty-state" class="empty-state">
+            <p>还没有任务。先写下今天最重要的一件事。</p>
+          </div>
+        </section>
+
+        <button id="fab-button" class="fab-button" type="button" aria-label="新建任务">+</button>
+
+        <nav class="mobile-nav" aria-label="移动视图切换">
+          <button class="mobile-nav-button is-active" data-view="tasks" type="button">清单</button>
+          <button class="mobile-nav-button" data-view="settings" type="button">设置</button>
+        </nav>
+      </main>
+    </div>
+
+    <template id="todo-item-template">
+      <li class="todo-item">
+        <label class="todo-check">
+          <input class="todo-toggle" type="checkbox" />
+          <span class="checkbox-ui" aria-hidden="true"></span>
+        </label>
+        <div class="todo-content">
+          <p class="todo-title"></p>
+          <div class="todo-meta"></div>
+        </div>
+        <div class="todo-actions">
+          <button class="icon-button edit-button" type="button">编辑</button>
+          <button class="icon-button delete-button" type="button">删除</button>
+        </div>
+      </li>
+    </template>
+
+    <dialog id="edit-dialog" class="edit-dialog">
+      <form id="edit-form" method="dialog" class="edit-form">
+        <div class="dialog-header">
+          <h2 id="editor-title">编辑任务</h2>
+          <button class="ghost-button" type="button" id="close-editor">关闭</button>
+        </div>
+        <label class="sr-only" for="edit-input">编辑任务内容</label>
+        <input id="edit-input" name="editTodo" type="text" maxlength="120" required />
+        <label class="sr-only" for="edit-list-select">所属清单</label>
+        <select id="edit-list-select" name="editList"></select>
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" id="cancel-edit">取消</button>
+          <button type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="list-dialog" class="edit-dialog list-dialog">
+      <form id="list-form" method="dialog" class="edit-form">
+        <div class="dialog-header">
+          <h2 id="list-editor-title">新建清单</h2>
+          <button class="ghost-button" type="button" id="close-list-editor">关闭</button>
+        </div>
+        <label class="sr-only" for="list-input">清单名称</label>
+        <input id="list-input" name="listTitle" type="text" maxlength="80" required />
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" id="cancel-list-edit">取消</button>
+          <button type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

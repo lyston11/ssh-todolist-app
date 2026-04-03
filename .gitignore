@@ -1,0 +1,4 @@
+node_modules/
+mobile/www/
+frontend/__pycache__/
+.DS_Store
