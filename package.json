@@ -1,6 +1,6 @@
 {
   "name": "ssh-todolist-app",
-  "version": "0.02.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {

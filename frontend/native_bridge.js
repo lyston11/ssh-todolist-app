@@ -3,6 +3,10 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 const IncomingLink = registerPlugin("IncomingLink");
 const DeviceBridge = registerPlugin("DeviceBridge");
 
+export function isNativeApp() {
+  return Capacitor.isNativePlatform();
+}
+
 export async function getNativeLaunchUrl() {
   if (!Capacitor.isNativePlatform()) {
     return null;

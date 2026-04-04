@@ -138,8 +138,8 @@ GitHub 自动发布：
 
 版本：
 
-- Android `versionName` 当前为 `0.02`
-- `package.json` 当前版本为 `0.02.0`
+- Android `versionName` 当前为 `0.10`
+- `package.json` 当前版本为 `0.10.0`
 
 正式签名：
 

@@ -17,6 +17,7 @@ import {
   addIncomingLinkListener,
   getNativeLaunchUrl,
   getNativeNetworkSnapshot,
+  isNativeApp,
 } from "./frontend/native_bridge.js";
 import {
   buildDiscoveryCandidates,
@@ -1108,11 +1109,25 @@ function render() {
 }
 
 function syncOnboardingVisibility() {
-  setOnboardingVisible(
-    shouldShowOnboarding({
-      dismissed: getState().onboardingDismissed,
-      serverBaseUrl: getState().serverBaseUrl,
-      recentConnections: getState().recentConnections,
-    }),
-  );
+  const shouldShow = shouldShowOnboarding({
+    dismissed: getState().onboardingDismissed,
+    serverBaseUrl: getState().serverBaseUrl,
+    recentConnections: getState().recentConnections,
+  });
+
+  const useInlineFallback =
+    shouldShow &&
+    (isNativeApp() || (globalThis.matchMedia?.("(max-width: 720px)")?.matches ?? false));
+
+  if (useInlineFallback) {
+    setOnboardingVisible(false);
+    if (!getState().serverBaseUrl) {
+      setActiveView("settings");
+      setServerConnectionState("idle");
+      setServerConnectionMessage("请先在设置页完成第一次节点接入。");
+    }
+    return;
+  }
+
+  setOnboardingVisible(shouldShow);
 }
