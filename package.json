@@ -4,13 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js frontend/api.js frontend/offline.js frontend/realtime.js frontend/state.js frontend/ui.js",
-    "test": "node --test tests/frontend_offline.test.mjs",
+    "check": "node --check app.js frontend/api.js frontend/connection_config.js frontend/connection_link.js frontend/discovery.js frontend/lifecycle.js frontend/native_bridge.js frontend/offline.js frontend/onboarding.js frontend/qr_scanner.js frontend/realtime.js frontend/recent_connections.js frontend/state.js frontend/ui.js scripts/build_android.mjs scripts/generate_keystore.mjs scripts/prepare_mobile.mjs scripts/serve_web.mjs",
+    "test": "node --test tests/*.test.mjs",
     "web:serve": "node scripts/serve_web.mjs",
     "mobile:prepare": "node scripts/prepare_mobile.mjs",
     "android:add": "npm run mobile:prepare && npx cap add android",
     "android:sync": "npm run mobile:prepare && npx cap sync android",
-    "android:open": "npx cap open android"
+    "android:open": "npx cap open android",
+    "android:build:debug": "node scripts/build_android.mjs debug",
+    "android:build:release": "node scripts/build_android.mjs release",
+    "android:build:aab": "node scripts/build_android.mjs bundle",
+    "android:keystore": "node scripts/generate_keystore.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",

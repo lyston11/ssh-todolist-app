@@ -7,6 +7,29 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <section id="onboarding-overlay" class="onboarding-overlay" hidden aria-label="首次连接引导">
+      <div class="onboarding-sheet">
+        <p class="connection-guide-eyebrow">Android 首次接入</p>
+        <h2 id="onboarding-title" class="onboarding-title">先把这台设备接入你的同步节点</h2>
+        <p id="onboarding-body" class="onboarding-body">
+          先填 Tailscale 地址，然后拉取服务端配置；如果你已经复制了 JSON，也可以直接从剪贴板导入。
+        </p>
+        <ul id="onboarding-checklist" class="onboarding-checklist"></ul>
+        <div class="onboarding-actions">
+          <button id="onboarding-fetch-config" type="button">拉取当前节点配置</button>
+          <button id="onboarding-use-draft" class="ghost-button" type="button">连接当前节点</button>
+          <button id="onboarding-connect-recent" class="ghost-button" type="button">连接最近节点</button>
+          <button id="onboarding-paste-config" class="ghost-button" type="button">读取剪贴板</button>
+          <button id="onboarding-scan-config" class="ghost-button" type="button">扫码导入</button>
+          <button id="onboarding-discover-network" class="ghost-button" type="button">检测 Tailscale</button>
+        </div>
+        <div class="onboarding-secondary-actions">
+          <button id="onboarding-open-settings" class="ghost-button" type="button">手动配置</button>
+          <button id="onboarding-dismiss" class="ghost-button" type="button">暂时跳过</button>
+        </div>
+      </div>
+    </section>
+
     <div class="page-shell">
       <header class="hero">
         <p class="eyebrow">Focus List</p>
@@ -18,6 +41,26 @@
 
       <main class="app-card" aria-label="Todo 应用">
         <section class="connection-panel" data-mobile-view="settings" aria-label="同步节点设置">
+          <section id="connection-guide" class="connection-guide" aria-label="连接引导">
+            <div class="connection-guide-header">
+              <p id="connection-guide-eyebrow" class="connection-guide-eyebrow">首次连接</p>
+              <h2 id="connection-guide-title" class="connection-guide-title">先连接一个同步节点</h2>
+              <p id="connection-guide-body" class="connection-guide-body">
+                先填一个 Tailscale 节点地址，再拉取服务端配置，或者直接导入服务端导出的 JSON。
+              </p>
+            </div>
+            <ul id="connection-guide-checklist" class="connection-guide-checklist"></ul>
+            <div class="connection-guide-actions">
+              <button id="guide-fetch-config" type="button">拉取当前节点配置</button>
+              <button id="guide-connect-current" class="ghost-button" type="button">连接当前节点</button>
+              <button id="guide-connect-recent" class="ghost-button" type="button">连接最近节点</button>
+              <button id="guide-scan-config" class="ghost-button" type="button">扫码导入</button>
+              <button id="guide-discover-network" class="ghost-button" type="button">检测 Tailscale</button>
+              <button id="guide-open-tasks" class="ghost-button" type="button">进入任务页</button>
+              <button id="guide-paste-config" class="ghost-button" type="button">读取剪贴板</button>
+            </div>
+          </section>
+
           <form id="connection-form" class="connection-form">
             <div class="connection-copy">
               <p class="connection-label">同步节点</p>
@@ -43,8 +86,51 @@
             <div class="connection-actions">
               <button type="submit">连接节点</button>
               <button id="test-server-url" class="ghost-button" type="button">测试连接</button>
+              <button id="fetch-connection-config" class="ghost-button" type="button">拉取配置</button>
+              <button id="scan-connection-config" class="ghost-button" type="button">扫码导入</button>
               <button id="reset-server-url" class="ghost-button" type="button">恢复默认</button>
             </div>
+            <div class="connection-import">
+              <div class="connection-copy">
+                <p class="connection-label">导入服务端配置</p>
+                <p class="connection-hint">直接粘贴 `ssh-todolist-services` 启动时输出的 JSON，或 `GET /api/connect-config` 返回的 JSON。</p>
+              </div>
+              <label class="sr-only" for="connection-config-input">服务端连接配置</label>
+              <textarea
+                id="connection-config-input"
+                name="connectionConfig"
+                rows="5"
+                placeholder='{"serverUrl":"http://100.x.x.x:8000","token":"your-token","wsUrl":"ws://100.x.x.x:8001/ws"}'
+              ></textarea>
+              <div class="connection-actions">
+                <button id="import-connection-config" type="button">导入配置</button>
+                <button id="paste-connection-config" class="ghost-button" type="button">读取剪贴板</button>
+              </div>
+            </div>
+            <section class="recent-connections" aria-label="最近连接节点">
+              <div class="connection-copy">
+                <p class="connection-label">最近连接</p>
+                <p class="connection-hint">手机上可直接一键回连最近使用过的 Tailscale 节点。</p>
+              </div>
+              <p id="recent-connections-empty" class="recent-connections-empty">还没有保存过连接节点。</p>
+              <div id="recent-connections-list" class="recent-connections-list"></div>
+            </section>
+            <section class="network-discovery" aria-label="Tailscale 检测与节点发现">
+              <div class="connection-copy">
+                <p class="connection-label">Tailscale 检测</p>
+                <p class="connection-hint">
+                  读取本机 Tailscale 地址，并测试当前节点、最近节点和本机候选地址是否可连。
+                </p>
+              </div>
+              <p id="network-discovery-summary" class="network-discovery-summary">
+                还没有读取本机网络信息。
+              </p>
+              <div class="connection-actions">
+                <button id="refresh-network-snapshot" type="button">读取本机网络</button>
+                <button id="probe-network-candidates" class="ghost-button" type="button">测试候选节点</button>
+              </div>
+              <div id="network-discovery-list" class="network-discovery-list"></div>
+            </section>
           </form>
           <p id="connection-message" class="connection-message" aria-live="polite"></p>
         </section>

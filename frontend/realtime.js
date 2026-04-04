@@ -45,10 +45,11 @@ export function connectRealtime({
     });
 
     nextSocket.addEventListener("close", () => {
-      if (socket === nextSocket) {
-        socket = null;
+      if (socket !== nextSocket) {
+        return;
       }
 
+      socket = null;
       if (stopped) {
         return;
       }
@@ -96,13 +97,35 @@ export function connectRealtime({
       socket = null;
       activeSocket?.close();
     },
+    reconnectNow() {
+      if (stopped) {
+        return;
+      }
+
+      clearReconnectTimer();
+      const activeSocket = socket;
+      socket = null;
+      if (activeSocket && activeSocket.readyState !== WebSocket.CLOSED) {
+        activeSocket.close();
+      }
+      connect();
+    },
   };
 }
 
 function buildSocketUrl(serverBaseUrl, socketConfig, authToken) {
+  if (socketConfig.wsUrl) {
+    const socketUrl = new URL(socketConfig.wsUrl);
+    const normalizedToken = authToken.trim();
+    if (normalizedToken) {
+      socketUrl.searchParams.set("token", normalizedToken);
+    }
+    return socketUrl.toString();
+  }
+
   const serverUrl = new URL(`${serverBaseUrl}/`);
   const protocol = serverUrl.protocol === "https:" ? "wss:" : "ws:";
-  const port = socketConfig.wsPort || serverUrl.port || "";
+  const port = socketConfig.wsPort ?? serverUrl.port ?? "";
   const socketUrl = new URL(`${protocol}//${serverUrl.hostname}${port ? `:${port}` : ""}${socketConfig.wsPath}`);
   const normalizedToken = authToken.trim();
   if (normalizedToken) {

@@ -2,3 +2,8 @@ node_modules/
 mobile/www/
 frontend/__pycache__/
 .DS_Store
+.gradle-local/
+android/local.properties
+android/signing.properties
+*.jks
+*.keystore

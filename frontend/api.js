@@ -16,6 +16,10 @@ export async function fetchMeta(serverBaseUrl, authToken = "") {
   return request(serverBaseUrl, "/api/meta", authToken);
 }
 
+export async function fetchConnectConfig(serverBaseUrl) {
+  return request(serverBaseUrl, "/api/connect-config");
+}
+
 export async function fetchSnapshot(serverBaseUrl, authToken = "") {
   return request(serverBaseUrl, "/api/snapshot", authToken);
 }

@@ -1,6 +1,10 @@
+import { loadOnboardingDismissed, saveOnboardingDismissed } from "./onboarding.js";
+import { loadRecentConnections } from "./recent_connections.js";
+
 const SERVER_URL_STORAGE_KEY = "focus-list.server-url";
 const SERVER_TOKEN_STORAGE_KEY = "focus-list.server-token";
 const ACTIVE_LIST_ID_STORAGE_KEY = "focus-list.active-list-id";
+
 const defaultServerBaseUrl = getDefaultServerBaseUrl();
 const defaultServerToken = getDefaultServerToken();
 
@@ -19,13 +23,26 @@ const state = {
   serverDraftUrl: loadServerBaseUrl(),
   serverToken: loadServerToken(),
   serverDraftToken: loadServerToken(),
+  connectionConfigDraft: "",
+  onboardingDismissed: loadOnboardingDismissed(),
+  onboardingVisible: false,
   serverConnectionState: "idle",
   serverConnectionMessage: getInitialConnectionMessage(loadServerBaseUrl()),
   pendingOperations: 0,
+  recentConnections: loadRecentConnections(),
   socketConfig: {
+    wsUrl: "",
     wsPort: getDefaultWebSocketPort(),
     wsPath: "/ws",
   },
+  networkSnapshot: {
+    supported: false,
+    interfaces: [],
+    tailscale: [],
+    lastUpdatedAt: null,
+  },
+  discoveryState: "idle",
+  discoveryCandidates: [],
 };
 
 export function getState() {
@@ -95,6 +112,19 @@ export function setServerDraftToken(serverDraftToken) {
   state.serverDraftToken = serverDraftToken;
 }
 
+export function setConnectionConfigDraft(connectionConfigDraft) {
+  state.connectionConfigDraft = connectionConfigDraft;
+}
+
+export function setOnboardingDismissed(onboardingDismissed) {
+  state.onboardingDismissed = onboardingDismissed;
+  saveOnboardingDismissed(onboardingDismissed);
+}
+
+export function setOnboardingVisible(onboardingVisible) {
+  state.onboardingVisible = onboardingVisible;
+}
+
 export function resetServerBaseUrl() {
   state.serverBaseUrl = defaultServerBaseUrl;
   state.serverDraftUrl = defaultServerBaseUrl;
@@ -119,8 +149,24 @@ export function setPendingOperations(pendingOperations) {
   state.pendingOperations = pendingOperations;
 }
 
+export function setRecentConnections(recentConnections) {
+  state.recentConnections = recentConnections;
+}
+
 export function setSocketConfig(socketConfig) {
   state.socketConfig = socketConfig;
+}
+
+export function setNetworkSnapshot(networkSnapshot) {
+  state.networkSnapshot = networkSnapshot;
+}
+
+export function setDiscoveryState(discoveryState) {
+  state.discoveryState = discoveryState;
+}
+
+export function setDiscoveryCandidates(discoveryCandidates) {
+  state.discoveryCandidates = discoveryCandidates;
 }
 
 export function sanitizeServerBaseUrl(value) {

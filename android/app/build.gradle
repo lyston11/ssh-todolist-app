@@ -1,5 +1,30 @@
 apply plugin: 'com.android.application'
 
+import java.util.Properties
+
+def signingProperties = new Properties()
+def signingPropertiesFile = rootProject.file('signing.properties')
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.withInputStream { stream ->
+        signingProperties.load(stream)
+    }
+}
+
+def getSigningValue = { key ->
+    return System.getenv(key) ?: signingProperties.getProperty(key)
+}
+
+def releaseStoreFileValue = getSigningValue('SSH_TODOLIST_ANDROID_STORE_FILE')
+def releaseStorePasswordValue = getSigningValue('SSH_TODOLIST_ANDROID_STORE_PASSWORD')
+def releaseKeyAliasValue = getSigningValue('SSH_TODOLIST_ANDROID_KEY_ALIAS')
+def releaseKeyPasswordValue = getSigningValue('SSH_TODOLIST_ANDROID_KEY_PASSWORD')
+def hasReleaseSigning = [
+    releaseStoreFileValue,
+    releaseStorePasswordValue,
+    releaseKeyAliasValue,
+    releaseKeyPasswordValue,
+].every { value -> value != null && value.trim() }
+
 android {
     namespace = "com.lyston11.sshtodolist"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,7 +33,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "0.01"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,9 +41,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFileValue)
+                storePassword releaseStorePasswordValue
+                keyAlias releaseKeyAliasValue
+                keyPassword releaseKeyPasswordValue
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -35,6 +73,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "com.journeyapps:zxing-android-embedded:4.3.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

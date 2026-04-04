@@ -1,14 +1,29 @@
+import { shouldShowOnboarding } from "./frontend/onboarding.js";
 import {
   ApiError,
   clearCompletedTodos,
   createList,
   createTodo,
   deleteTodo,
+  fetchConnectConfig,
   fetchMeta,
   fetchSnapshot,
   updateList,
   updateTodo,
 } from "./frontend/api.js";
+import { parseConnectionConfig, resolveSocketConfig } from "./frontend/connection_config.js";
+import { clearIncomingConnectionLink, readIncomingConnectionLink } from "./frontend/connection_link.js";
+import {
+  addIncomingLinkListener,
+  getNativeLaunchUrl,
+  getNativeNetworkSnapshot,
+} from "./frontend/native_bridge.js";
+import {
+  buildDiscoveryCandidates,
+  describeNetworkSnapshot,
+  probeDiscoveryCandidates,
+} from "./frontend/discovery.js";
+import { attachLifecycleHandlers } from "./frontend/lifecycle.js";
 import {
   enqueueOperation,
   flushPendingOperations,
@@ -16,11 +31,19 @@ import {
   loadPendingOperations,
   saveCachedSnapshot,
 } from "./frontend/offline.js";
+import { QrScanCancelledError, scanConnectionQrCode } from "./frontend/qr_scanner.js";
+import { removeRecentConnection, saveRecentConnection } from "./frontend/recent_connections.js";
 import { connectRealtime } from "./frontend/realtime.js";
 import {
+  setDiscoveryCandidates,
+  setDiscoveryState,
   getState,
+  setNetworkSnapshot,
   resetServerBaseUrl,
   resetServerToken,
+  setConnectionConfigDraft,
+  setOnboardingDismissed,
+  setOnboardingVisible,
   sanitizeServerBaseUrl,
   sanitizeServerToken,
   setActiveListId,
@@ -32,6 +55,7 @@ import {
   setListEditorMode,
   setLists,
   setPendingOperations,
+  setRecentConnections,
   setServerConnectionMessage,
   setServerConnectionState,
   setServerBaseUrl,
@@ -53,12 +77,27 @@ import {
 } from "./frontend/ui.js";
 
 let realtimeConnection = null;
+let removeIncomingLinkListener = () => {};
+let removeLifecycleHandlers = () => {};
+let resumeSyncPromise = null;
 
 initUI({
+  getPreferredRecentConnection,
   onServerUrlInput: handleServerUrlInput,
   onServerTokenInput: handleServerTokenInput,
+  onConnectionConfigInput: handleConnectionConfigInput,
   onSaveServerUrl: handleSaveServerUrl,
   onTestServerUrl: handleTestServerUrl,
+  onFetchConnectionConfig: handleFetchConnectionConfig,
+  onImportConnectionConfig: handleImportConnectionConfig,
+  onPasteConnectionConfig: handlePasteConnectionConfig,
+  onScanConnectionConfig: handleScanConnectionConfig,
+  onRefreshNetworkSnapshot: handleRefreshNetworkSnapshot,
+  onProbeDiscoveryCandidates: handleProbeDiscoveryCandidates,
+  onUseDiscoveryCandidate: handleUseDiscoveryCandidate,
+  onConnectRecentConnection: handleConnectRecentConnection,
+  onDismissOnboarding: handleDismissOnboarding,
+  onRemoveRecentConnection: handleRemoveRecentConnection,
   onResetServerUrl: handleResetServerUrl,
   onViewChange: handleViewChange,
   onSelectList: handleSelectList,
@@ -79,10 +118,30 @@ initUI({
 });
 
 render();
+removeIncomingLinkListener = addIncomingLinkListener((incomingUrl) => {
+  void consumeIncomingConnectionUrl(incomingUrl);
+});
+removeLifecycleHandlers = attachLifecycleHandlers({
+  onResume: (reason) => {
+    void handleLifecycleResume(reason);
+  },
+  onOnline: handleLifecycleOnline,
+  onOffline: handleLifecycleOffline,
+});
 bootstrap();
 
 async function bootstrap() {
   setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
+  syncOnboardingVisibility();
+  await refreshNetworkSnapshot({ silent: true });
+  if (await consumeIncomingConnectionUrl(globalThis.location?.href ?? "", { clearBrowserUrl: true })) {
+    return;
+  }
+
+  const nativeLaunchUrl = await getNativeLaunchUrl();
+  if (await consumeIncomingConnectionUrl(nativeLaunchUrl)) {
+    return;
+  }
   hydrateFromCache();
   if (!getState().serverBaseUrl) {
     setSyncState("offline");
@@ -116,6 +175,72 @@ function handleServerTokenInput(rawValue) {
   setServerDraftToken(rawValue);
 }
 
+function handleConnectionConfigInput(rawValue) {
+  setConnectionConfigDraft(rawValue);
+}
+
+function getPreferredRecentConnection() {
+  return getState().recentConnections[0] ?? null;
+}
+
+function handleDismissOnboarding(persistDismissal) {
+  if (persistDismissal) {
+    setOnboardingDismissed(true);
+  }
+  setOnboardingVisible(false);
+  render();
+}
+
+async function consumeIncomingConnectionUrl(incomingUrl, { clearBrowserUrl = false } = {}) {
+  const incomingConnectionLink = readIncomingConnectionLink(incomingUrl ?? "");
+  if (!incomingConnectionLink) {
+    return false;
+  }
+
+  if (clearBrowserUrl) {
+    clearIncomingConnectionLink(incomingUrl);
+  }
+
+  setConnectionConfigDraft(incomingConnectionLink.rawValue);
+  const candidate = parseConnectionConfig(incomingConnectionLink.rawValue);
+  if (candidate.ok) {
+    await applyImportedConnectionConfig(candidate.value, incomingConnectionLink.rawValue);
+    return true;
+  }
+
+  setServerConnectionState("error");
+  setServerConnectionMessage("导入链接中的连接配置无效，请检查后重试。");
+  render();
+  return true;
+}
+
+async function handleConnectRecentConnection(serverBaseUrl) {
+  const recentConnection = getState().recentConnections.find((item) => item.serverBaseUrl === serverBaseUrl);
+  if (!recentConnection) {
+    failConnection("最近连接记录不存在。");
+    return;
+  }
+
+  setServerDraftUrl(recentConnection.serverBaseUrl);
+  setServerDraftToken(recentConnection.serverToken);
+  render();
+
+  await connectToServer(recentConnection.serverBaseUrl, recentConnection.serverToken, {
+    persist: true,
+    openTasksView: true,
+  });
+}
+
+function handleRemoveRecentConnection(serverBaseUrl) {
+  setRecentConnections(removeRecentConnection(serverBaseUrl));
+  if (getState().serverDraftUrl === serverBaseUrl && getState().serverBaseUrl !== serverBaseUrl) {
+    setServerDraftUrl("");
+    setServerDraftToken("");
+  }
+  syncOnboardingVisibility();
+  render();
+}
+
 async function handleSaveServerUrl(rawValue, rawToken) {
   const candidate = validateServerBaseUrl(rawValue);
   if (!candidate.ok) {
@@ -126,6 +251,203 @@ async function handleSaveServerUrl(rawValue, rawToken) {
   await connectToServer(candidate.value, sanitizeServerToken(rawToken), {
     persist: true,
     openTasksView: true,
+  });
+}
+
+async function handleImportConnectionConfig(rawValue) {
+  const candidate = parseConnectionConfig(rawValue);
+  if (!candidate.ok) {
+    failConnection(candidate.message);
+    return;
+  }
+
+  await applyImportedConnectionConfig(candidate.value, rawValue);
+}
+
+async function handleFetchConnectionConfig(rawValue) {
+  const candidate = validateServerBaseUrl(rawValue);
+  if (!candidate.ok) {
+    failConnection(candidate.message);
+    return;
+  }
+
+  setServerConnectionState("testing");
+  setServerConnectionMessage(`正在从 ${candidate.value} 拉取服务端配置...`);
+  render();
+
+  try {
+    const payload = await fetchConnectConfig(candidate.value);
+    const serializedPayload = JSON.stringify(payload, null, 2);
+    const parsedConfig = parseConnectionConfig(serializedPayload);
+    if (!parsedConfig.ok) {
+      failConnection(parsedConfig.message);
+      return;
+    }
+
+    await applyImportedConnectionConfig(parsedConfig.value, serializedPayload);
+  } catch (error) {
+    failConnection(error.message || "拉取服务端配置失败");
+  }
+}
+
+async function handlePasteConnectionConfig() {
+  if (!navigator.clipboard?.readText) {
+    failConnection("当前环境不支持从剪贴板读取，请手动粘贴连接配置。");
+    return;
+  }
+
+  try {
+    const text = await navigator.clipboard.readText();
+    setConnectionConfigDraft(text);
+    render();
+    await handleImportConnectionConfig(text);
+  } catch (error) {
+    console.error(error);
+    failConnection("读取剪贴板失败，请检查浏览器权限后重试。");
+  }
+}
+
+async function handleScanConnectionConfig() {
+  setServerConnectionState("testing");
+  setServerConnectionMessage("正在等待二维码扫描结果...");
+  render();
+
+  try {
+    const scannedValue = await scanConnectionQrCode();
+    setConnectionConfigDraft(scannedValue);
+    render();
+    await handleImportConnectionConfig(scannedValue);
+  } catch (error) {
+    if (error instanceof QrScanCancelledError || /已取消二维码扫描/.test(error?.message ?? "")) {
+      setServerConnectionState("idle");
+      setServerConnectionMessage("已取消二维码扫描。");
+      render();
+      return;
+    }
+    failConnection(error.message || "二维码识别失败");
+  }
+}
+
+async function handleRefreshNetworkSnapshot() {
+  await refreshNetworkSnapshot();
+}
+
+async function refreshNetworkSnapshot({ silent = false } = {}) {
+  if (!silent) {
+    setDiscoveryState("testing");
+    setServerConnectionMessage("正在读取本机网络和 Tailscale 地址...");
+    render();
+  }
+
+  const snapshot = await getNativeNetworkSnapshot();
+  setNetworkSnapshot(snapshot);
+  const discoveryCandidates = buildDiscoveryCandidates({
+    draftUrl: getState().serverDraftUrl,
+    serverBaseUrl: getState().serverBaseUrl,
+    recentConnections: getState().recentConnections,
+    networkSnapshot: snapshot,
+  });
+  setDiscoveryCandidates(discoveryCandidates);
+  setDiscoveryState("ready");
+
+  if (!silent) {
+    setServerConnectionState("idle");
+    setServerConnectionMessage(describeNetworkSnapshot(snapshot));
+    render();
+  }
+}
+
+async function handleProbeDiscoveryCandidates() {
+  const baseCandidates = buildDiscoveryCandidates({
+    draftUrl: getState().serverDraftUrl,
+    serverBaseUrl: getState().serverBaseUrl,
+    recentConnections: getState().recentConnections,
+    networkSnapshot: getState().networkSnapshot,
+  });
+
+  if (baseCandidates.length === 0) {
+    failConnection("还没有可测试的候选节点，请先填写节点地址或先读取本机网络。");
+    return;
+  }
+
+  setDiscoveryState("testing");
+  setDiscoveryCandidates(
+    baseCandidates.map((item) => ({
+      ...item,
+      status: "testing",
+      message: "正在测试连通性",
+    })),
+  );
+  setServerConnectionState("testing");
+  setServerConnectionMessage("正在测试候选节点连通性...");
+  render();
+
+  const results = await probeDiscoveryCandidates(baseCandidates, getState().serverDraftToken, {
+    fetchMeta,
+    fetchConnectConfig,
+  });
+
+  setDiscoveryCandidates(results);
+  setDiscoveryState("ready");
+
+  const firstReadyCandidate = results.find((item) => item.status === "ready" || item.status === "reachable");
+  if (firstReadyCandidate) {
+    setServerConnectionState("connected");
+    setServerConnectionMessage(`已找到可用节点：${firstReadyCandidate.serverBaseUrl}`);
+  } else {
+    setServerConnectionState("error");
+    setServerConnectionMessage("没有找到可直接连通的候选节点，请检查 Tailscale、端口和 token。");
+  }
+  render();
+}
+
+async function handleUseDiscoveryCandidate(serverBaseUrl) {
+  const candidate = getState().discoveryCandidates.find((item) => item.serverBaseUrl === serverBaseUrl);
+  if (!candidate) {
+    failConnection("候选节点不存在。");
+    return;
+  }
+
+  setServerDraftUrl(candidate.serverBaseUrl);
+  if (candidate.serverToken) {
+    setServerDraftToken(candidate.serverToken);
+  }
+  setServerConnectionState("imported");
+  setServerConnectionMessage(`已填入候选节点：${candidate.serverBaseUrl}`);
+  render();
+
+  if (candidate.serverToken && (candidate.status === "ready" || candidate.status === "reachable")) {
+    await connectToServer(candidate.serverBaseUrl, candidate.serverToken, {
+      persist: true,
+      openTasksView: true,
+    });
+  }
+}
+
+async function applyImportedConnectionConfig(connectionConfig, rawValue) {
+  const { serverBaseUrl, serverToken, authRequired } = connectionConfig;
+  const nextMessage =
+    authRequired && !serverToken
+      ? `已导入节点：${serverBaseUrl}，该节点要求 token，请补充后再连接。`
+      : `已导入节点配置：${serverBaseUrl}`;
+
+  setServerDraftUrl(serverBaseUrl);
+  setServerDraftToken(serverToken);
+  setConnectionConfigDraft(rawValue);
+  setServerConnectionState("imported");
+  setServerConnectionMessage(nextMessage);
+  render();
+
+  if (authRequired && !serverToken) {
+    syncOnboardingVisibility();
+    render();
+    return;
+  }
+
+  await connectToServer(serverBaseUrl, serverToken, {
+    persist: true,
+    openTasksView: true,
+    initialSocketConfig: connectionConfig.socketConfig,
   });
 }
 
@@ -156,8 +478,10 @@ async function handleResetServerUrl() {
   const previousServerToken = getState().serverToken;
   resetServerBaseUrl();
   resetServerToken();
+  setConnectionConfigDraft("");
   realtimeConnection?.disconnect();
   realtimeConnection = null;
+  syncOnboardingVisibility();
 
   if (!getState().serverBaseUrl) {
     setLists([]);
@@ -434,7 +758,11 @@ async function executeOrQueue({ kind, payload, optimisticApply }) {
   }
 }
 
-async function connectToServer(serverBaseUrl, serverToken, { persist, openTasksView }) {
+async function connectToServer(
+  serverBaseUrl,
+  serverToken,
+  { persist, openTasksView, initialSocketConfig = null },
+) {
   setServerConnectionState("testing");
   setServerConnectionMessage(`正在连接 ${serverBaseUrl || "同步节点"}...`);
   setSyncState("connecting");
@@ -444,10 +772,7 @@ async function connectToServer(serverBaseUrl, serverToken, { persist, openTasksV
   try {
     await flushPendingQueue(serverBaseUrl, serverToken);
     const meta = await fetchMeta(serverBaseUrl, serverToken);
-    setSocketConfig({
-      wsPort: typeof meta.wsPort === "number" ? meta.wsPort : getState().socketConfig.wsPort,
-      wsPath: typeof meta.wsPath === "string" ? meta.wsPath : "/ws",
-    });
+    setSocketConfig(resolveSocketConfig(meta, initialSocketConfig ?? getState().socketConfig));
 
     if (persist) {
       setServerBaseUrl(serverBaseUrl);
@@ -459,6 +784,15 @@ async function connectToServer(serverBaseUrl, serverToken, { persist, openTasksV
     await refreshSnapshot(serverBaseUrl, serverToken);
     setServerConnectionState("connected");
     setServerConnectionMessage(`已连接节点：${serverBaseUrl}`);
+    setOnboardingDismissed(true);
+    setOnboardingVisible(false);
+    setRecentConnections(
+      saveRecentConnection({
+        serverBaseUrl,
+        serverToken,
+        authRequired: meta.authRequired === true,
+      }),
+    );
 
     realtimeConnection?.disconnect();
     realtimeConnection = connectRealtime({
@@ -493,6 +827,7 @@ async function connectToServer(serverBaseUrl, serverToken, { persist, openTasksV
     if (openTasksView) {
       setActiveView("tasks");
     }
+    await refreshNetworkSnapshot({ silent: true });
     render();
   } catch (error) {
     handleSyncError(error);
@@ -662,6 +997,64 @@ function handleSyncError(error, message = null) {
   render();
 }
 
+function handleLifecycleOffline() {
+  if (!getState().serverBaseUrl) {
+    return;
+  }
+  setSyncState("offline");
+  setServerConnectionState("error");
+  setServerConnectionMessage("当前设备已离线，待恢复网络后会自动重连。");
+  render();
+}
+
+function handleLifecycleOnline() {
+  if (!getState().serverBaseUrl) {
+    return;
+  }
+  setServerConnectionState("testing");
+  setServerConnectionMessage("网络已恢复，正在尝试重新建立同步连接...");
+  render();
+}
+
+async function handleLifecycleResume(reason) {
+  await refreshNetworkSnapshot({ silent: true });
+  await resumeServerSync(reason);
+}
+
+async function resumeServerSync(reason) {
+  if (!getState().serverBaseUrl || resumeSyncPromise) {
+    return resumeSyncPromise;
+  }
+
+  const shouldAnnounce =
+    getState().syncState !== "online" || reason === "online" || getState().serverConnectionState === "error";
+
+  if (shouldAnnounce) {
+    setServerConnectionState("testing");
+    setServerConnectionMessage("正在恢复同步连接...");
+    render();
+  }
+
+  resumeSyncPromise = (async () => {
+    try {
+      realtimeConnection?.reconnectNow?.();
+      await flushPendingQueue(getState().serverBaseUrl, getState().serverToken);
+      await refreshSnapshot(getState().serverBaseUrl, getState().serverToken);
+      setServerConnectionState("connected");
+      if (shouldAnnounce) {
+        setServerConnectionMessage(`已恢复同步：${getState().serverBaseUrl}`);
+      }
+      render();
+    } catch (error) {
+      handleSyncError(error, "恢复同步失败，稍后会继续自动重试。");
+    } finally {
+      resumeSyncPromise = null;
+    }
+  })();
+
+  return resumeSyncPromise;
+}
+
 function failConnection(message) {
   setServerConnectionState("error");
   setServerConnectionMessage(message);
@@ -712,4 +1105,14 @@ function isListRecord(value) {
 
 function render() {
   renderApp(getState());
+}
+
+function syncOnboardingVisibility() {
+  setOnboardingVisible(
+    shouldShowOnboarding({
+      dismissed: getState().onboardingDismissed,
+      serverBaseUrl: getState().serverBaseUrl,
+      recentConnections: getState().recentConnections,
+    }),
+  );
 }
