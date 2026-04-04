@@ -72,6 +72,27 @@ const elements = {
 
 let currentHandlers = null;
 
+function bindPress(element, handler) {
+  let lastTouchAt = 0;
+
+  element.addEventListener(
+    "touchend",
+    async (event) => {
+      lastTouchAt = Date.now();
+      event.preventDefault();
+      await handler(event);
+    },
+    { passive: false },
+  );
+
+  element.addEventListener("click", async (event) => {
+    if (Date.now() - lastTouchAt < 700) {
+      return;
+    }
+    await handler(event);
+  });
+}
+
 export function initUI(handlers) {
   currentHandlers = handlers;
   elements.serverUrlInput.addEventListener("input", (event) => {
@@ -91,27 +112,27 @@ export function initUI(handlers) {
     await handlers.onSaveServerUrl(elements.serverUrlInput.value, elements.serverTokenInput.value);
   });
 
-  elements.onboardingUseDraftButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingUseDraftButton, async () => {
     await handlers.onSaveServerUrl(elements.serverUrlInput.value, elements.serverTokenInput.value);
   });
 
-  elements.onboardingFetchConfigButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingFetchConfigButton, async () => {
     await handlers.onFetchConnectionConfig(elements.serverUrlInput.value);
   });
 
-  elements.onboardingPasteConfigButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingPasteConfigButton, async () => {
     await handlers.onPasteConnectionConfig();
   });
 
-  elements.onboardingScanConfigButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingScanConfigButton, async () => {
     await handlers.onScanConnectionConfig();
   });
 
-  elements.onboardingDiscoverNetworkButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingDiscoverNetworkButton, async () => {
     await handlers.onRefreshNetworkSnapshot();
   });
 
-  elements.onboardingConnectRecentButton.addEventListener("click", async () => {
+  bindPress(elements.onboardingConnectRecentButton, async () => {
     const firstRecentConnection = handlers.getPreferredRecentConnection();
     if (!firstRecentConnection) {
       return;
@@ -119,13 +140,29 @@ export function initUI(handlers) {
     await handlers.onConnectRecentConnection(firstRecentConnection.serverBaseUrl);
   });
 
-  elements.onboardingOpenSettingsButton.addEventListener("click", () => {
+  bindPress(elements.onboardingOpenSettingsButton, async () => {
     handlers.onDismissOnboarding(false);
     handlers.onViewChange("settings");
   });
 
-  elements.onboardingDismissButton.addEventListener("click", () => {
+  bindPress(elements.onboardingDismissButton, async () => {
     handlers.onDismissOnboarding(true);
+  });
+
+  elements.onboardingOverlay.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!elements.onboardingOverlay.hidden) {
+        event.preventDefault();
+      }
+    },
+    { passive: false },
+  );
+
+  elements.onboardingOverlay.addEventListener("wheel", (event) => {
+    if (!elements.onboardingOverlay.hidden) {
+      event.preventDefault();
+    }
   });
 
   elements.guideFetchConfigButton.addEventListener("click", async () => {
@@ -344,6 +381,7 @@ function renderOnboarding(state, handlers) {
   const model = buildOnboardingModel(state);
 
   elements.onboardingOverlay.hidden = !state.onboardingVisible;
+  document.body.dataset.onboardingVisible = state.onboardingVisible ? "true" : "false";
   elements.onboardingTitle.textContent = model.title;
   elements.onboardingBody.textContent = model.body;
   elements.onboardingChecklist.innerHTML = "";

@@ -34,6 +34,11 @@ body {
     linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
 }
 
+body[data-onboarding-visible="true"] {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body::before,
 body::after {
   content: "";
@@ -66,8 +71,10 @@ body::after {
   display: grid;
   place-items: center;
   padding: 18px;
-  background: rgba(20, 38, 62, 0.32);
-  backdrop-filter: blur(8px);
+  background: rgba(20, 38, 62, 0.56);
+  pointer-events: auto;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .onboarding-sheet {
@@ -81,6 +88,8 @@ body::after {
     rgba(255, 250, 245, 0.96);
   border: 1px solid rgba(20, 38, 62, 0.08);
   box-shadow: var(--shadow);
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .onboarding-title,
