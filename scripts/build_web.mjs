@@ -2,8 +2,8 @@ import { resolve } from "node:path";
 
 import { copyWebAssets } from "./lib/copy_web_assets.mjs";
 
-const outputDir = resolve(process.cwd(), "mobile/www");
+const outputDir = resolve(process.cwd(), "dist");
 
 copyWebAssets(outputDir);
 
-console.log(`Prepared mobile web assets in ${outputDir}`);
+console.log(`Built web assets in ${outputDir}`);

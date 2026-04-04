@@ -14,6 +14,9 @@ const state = {
   activeListId: loadActiveListId(),
   currentFilter: "all",
   activeView: "tasks",
+  selectionMode: false,
+  selectedTodoIds: [],
+  batchMoveListId: "",
   editingTodoId: null,
   editorMode: "edit",
   editingListId: null,
@@ -74,6 +77,41 @@ export function setActiveView(view) {
   state.activeView = view;
 }
 
+export function setSelectionMode(selectionMode) {
+  state.selectionMode = selectionMode;
+}
+
+export function setSelectedTodoIds(selectedTodoIds) {
+  state.selectedTodoIds = Array.from(
+    new Set(
+      (Array.isArray(selectedTodoIds) ? selectedTodoIds : []).filter(
+        (todoId) => typeof todoId === "string" && todoId.trim(),
+      ),
+    ),
+  );
+}
+
+export function toggleSelectedTodoId(todoId, selected) {
+  const normalizedTodoId = typeof todoId === "string" ? todoId.trim() : "";
+  if (!normalizedTodoId) {
+    return;
+  }
+
+  const nextSelectedTodoIds = new Set(state.selectedTodoIds);
+  const shouldSelect = selected ?? !nextSelectedTodoIds.has(normalizedTodoId);
+  if (shouldSelect) {
+    nextSelectedTodoIds.add(normalizedTodoId);
+  } else {
+    nextSelectedTodoIds.delete(normalizedTodoId);
+  }
+
+  state.selectedTodoIds = Array.from(nextSelectedTodoIds);
+}
+
+export function clearSelectedTodoIds() {
+  state.selectedTodoIds = [];
+}
+
 export function setEditingTodoId(todoId) {
   state.editingTodoId = todoId;
 }
@@ -114,6 +152,10 @@ export function setServerDraftToken(serverDraftToken) {
 
 export function setConnectionConfigDraft(connectionConfigDraft) {
   state.connectionConfigDraft = connectionConfigDraft;
+}
+
+export function setBatchMoveListId(batchMoveListId) {
+  state.batchMoveListId = typeof batchMoveListId === "string" ? batchMoveListId.trim() : "";
 }
 
 export function setOnboardingDismissed(onboardingDismissed) {

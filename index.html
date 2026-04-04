@@ -61,39 +61,57 @@
             </div>
           </section>
 
+          <section id="connection-status-card" class="connection-status-card" aria-label="当前连接状态">
+            <div class="connection-status-header">
+              <p class="connection-status-eyebrow">当前节点</p>
+              <h2 id="connection-status-title" class="connection-status-title">还没有连接节点</h2>
+            </div>
+            <p id="connection-status-body" class="connection-status-body">
+              先接入一个同步节点，后续最近连接、候选节点和离线缓存都会围绕这个节点工作。
+            </p>
+            <div id="connection-status-tags" class="connection-status-tags"></div>
+          </section>
+
           <form id="connection-form" class="connection-form">
-            <div class="connection-copy">
-              <p class="connection-label">同步节点</p>
-              <p class="connection-hint">填写 Tailscale IP 或 MagicDNS 地址，再输入后端 token，例如 `http://100.x.x.x:8000`。</p>
-            </div>
-            <label class="sr-only" for="server-url-input">同步节点地址</label>
-            <input
-              id="server-url-input"
-              name="serverUrl"
-              type="url"
-              inputmode="url"
-              placeholder="http://100.x.x.x:8000"
-              autocomplete="off"
-            />
-            <label class="sr-only" for="server-token-input">访问令牌</label>
-            <input
-              id="server-token-input"
-              name="serverToken"
-              type="password"
-              placeholder="输入服务端 token"
-              autocomplete="off"
-            />
-            <div class="connection-actions">
-              <button type="submit">连接节点</button>
-              <button id="test-server-url" class="ghost-button" type="button">测试连接</button>
-              <button id="fetch-connection-config" class="ghost-button" type="button">拉取配置</button>
-              <button id="scan-connection-config" class="ghost-button" type="button">扫码导入</button>
-              <button id="reset-server-url" class="ghost-button" type="button">恢复默认</button>
-            </div>
-            <div class="connection-import">
-              <div class="connection-copy">
-                <p class="connection-label">导入服务端配置</p>
-                <p class="connection-hint">直接粘贴 `ssh-todolist-services` 启动时输出的 JSON，或 `GET /api/connect-config` 返回的 JSON。</p>
+            <section class="settings-card settings-card-primary" aria-label="同步节点基础设置">
+              <div class="settings-card-header">
+                <div class="connection-copy">
+                  <p class="connection-label">同步节点</p>
+                  <p class="connection-hint">填写 Tailscale IP 或 MagicDNS 地址，再输入后端 token，例如 `http://100.x.x.x:8000`。</p>
+                </div>
+              </div>
+              <label class="sr-only" for="server-url-input">同步节点地址</label>
+              <input
+                id="server-url-input"
+                name="serverUrl"
+                type="url"
+                inputmode="url"
+                placeholder="http://100.x.x.x:8000"
+                autocomplete="off"
+              />
+              <label class="sr-only" for="server-token-input">访问令牌</label>
+              <input
+                id="server-token-input"
+                name="serverToken"
+                type="password"
+                placeholder="输入服务端 token"
+                autocomplete="off"
+              />
+              <div class="connection-actions">
+                <button id="connect-server-button" type="submit">连接节点</button>
+                <button id="test-server-url" class="ghost-button" type="button">测试连接</button>
+                <button id="fetch-connection-config" class="ghost-button" type="button">拉取配置</button>
+                <button id="scan-connection-config" class="ghost-button" type="button">扫码导入</button>
+                <button id="reset-server-url" class="ghost-button" type="button">恢复默认</button>
+              </div>
+            </section>
+
+            <section class="settings-card connection-import" aria-label="导入服务端配置">
+              <div class="settings-card-header">
+                <div class="connection-copy">
+                  <p class="connection-label">导入服务端配置</p>
+                  <p class="connection-hint">直接粘贴 `ssh-todolist-services` 启动时输出的 JSON，或 `GET /api/connect-config` 返回的 JSON。</p>
+                </div>
               </div>
               <label class="sr-only" for="connection-config-input">服务端连接配置</label>
               <textarea
@@ -106,21 +124,27 @@
                 <button id="import-connection-config" type="button">导入配置</button>
                 <button id="paste-connection-config" class="ghost-button" type="button">读取剪贴板</button>
               </div>
-            </div>
-            <section class="recent-connections" aria-label="最近连接节点">
-              <div class="connection-copy">
-                <p class="connection-label">最近连接</p>
-                <p class="connection-hint">手机上可直接一键回连最近使用过的 Tailscale 节点。</p>
+            </section>
+
+            <section class="settings-card recent-connections" aria-label="最近连接节点">
+              <div class="settings-card-header">
+                <div class="connection-copy">
+                  <p class="connection-label">最近连接</p>
+                  <p class="connection-hint">手机上可直接一键回连最近使用过的 Tailscale 节点。</p>
+                </div>
               </div>
               <p id="recent-connections-empty" class="recent-connections-empty">还没有保存过连接节点。</p>
               <div id="recent-connections-list" class="recent-connections-list"></div>
             </section>
-            <section class="network-discovery" aria-label="Tailscale 检测与节点发现">
-              <div class="connection-copy">
-                <p class="connection-label">Tailscale 检测</p>
-                <p class="connection-hint">
-                  读取本机 Tailscale 地址，并测试当前节点、最近节点和本机候选地址是否可连。
-                </p>
+
+            <section class="settings-card network-discovery" aria-label="Tailscale 检测与节点发现">
+              <div class="settings-card-header">
+                <div class="connection-copy">
+                  <p class="connection-label">Tailscale 检测</p>
+                  <p class="connection-hint">
+                    读取本机 Tailscale 地址，并测试当前节点、最近节点和本机候选地址是否可连。
+                  </p>
+                </div>
               </div>
               <p id="network-discovery-summary" class="network-discovery-summary">
                 还没有读取本机网络信息。
@@ -161,9 +185,30 @@
             <span id="sync-status" class="sync-status">正在连接同步服务</span>
             <span id="sync-queue-status" class="sync-queue-status">0 个待同步操作</span>
             <span id="todo-count">0 个待完成</span>
+            <button id="toggle-selection-mode" class="ghost-button" type="button">批量操作</button>
             <button id="clear-completed" class="ghost-button" type="button">
               清除已完成
             </button>
+          </div>
+        </section>
+
+        <section id="batch-toolbar" class="batch-toolbar" data-mobile-view="tasks" hidden aria-label="批量任务操作">
+          <div class="batch-toolbar-header">
+            <p id="batch-selection-summary" class="batch-selection-summary">未选择任何任务</p>
+            <div class="batch-toolbar-actions">
+              <button id="select-visible-todos" class="ghost-button" type="button">全选当前视图</button>
+              <button id="clear-selected-todos" class="ghost-button" type="button">取消选择</button>
+            </div>
+          </div>
+          <div class="batch-toolbar-actions">
+            <button id="batch-complete-todos" type="button">批量完成</button>
+            <button id="batch-uncomplete-todos" class="ghost-button" type="button">恢复进行中</button>
+            <button id="batch-delete-todos" class="ghost-button danger-button" type="button">批量删除</button>
+          </div>
+          <div class="batch-move-row">
+            <label for="batch-move-list-select">移动到清单</label>
+            <select id="batch-move-list-select" name="batchMoveList"></select>
+            <button id="batch-move-todos" type="button">批量移动</button>
           </div>
         </section>
 
@@ -173,15 +218,29 @@
               <p class="lists-label">清单</p>
               <p class="lists-hint">把待办按项目或场景分开管理。</p>
             </div>
-            <button id="add-list-button" class="ghost-button" type="button">新建清单</button>
+            <div class="lists-header-actions">
+              <button id="edit-list-button" class="ghost-button" type="button">重命名</button>
+              <button id="delete-list-button" class="ghost-button danger-button" type="button">删除</button>
+              <button id="add-list-button" class="ghost-button" type="button">新建清单</button>
+            </div>
           </div>
+          <section id="active-list-summary" class="active-list-summary" aria-label="当前清单概览">
+            <p class="active-list-eyebrow">当前清单</p>
+            <h2 id="active-list-title" class="active-list-title">还没有清单</h2>
+            <p id="active-list-meta" class="active-list-meta">连接节点后会在这里显示当前清单的任务统计。</p>
+          </section>
           <div id="lists-tabs" class="lists-tabs" role="tablist" aria-label="清单切换"></div>
         </section>
 
         <section class="todo-panel" data-mobile-view="tasks">
+          <header class="todo-panel-header">
+            <p id="todo-panel-eyebrow" class="todo-panel-eyebrow">任务视图</p>
+            <h2 id="todo-panel-title" class="todo-panel-title">准备开始今天的任务</h2>
+            <p id="todo-panel-meta" class="todo-panel-meta">连接节点后，这里会显示当前清单和筛选状态。</p>
+          </header>
           <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
           <div id="empty-state" class="empty-state">
-            <p>还没有任务。先写下今天最重要的一件事。</p>
+            <p id="empty-state-text">还没有任务。先写下今天最重要的一件事。</p>
           </div>
         </section>
 
@@ -196,12 +255,20 @@
 
     <template id="todo-item-template">
       <li class="todo-item">
+        <label class="todo-select">
+          <input class="todo-select-toggle" type="checkbox" />
+          <span class="todo-select-ui" aria-hidden="true"></span>
+        </label>
         <label class="todo-check">
           <input class="todo-toggle" type="checkbox" />
           <span class="checkbox-ui" aria-hidden="true"></span>
         </label>
         <div class="todo-content">
           <p class="todo-title"></p>
+          <div class="todo-badges">
+            <span class="todo-badge todo-status-badge"></span>
+            <span class="todo-badge todo-list-badge"></span>
+          </div>
           <div class="todo-meta"></div>
         </div>
         <div class="todo-actions">

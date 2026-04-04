@@ -24,3 +24,10 @@ export function shouldShowOnboarding({ dismissed, serverBaseUrl, recentConnectio
   }
   return true;
 }
+
+export function shouldDefaultToSettingsView({ isMobileLike, serverBaseUrl }) {
+  if (!isMobileLike) {
+    return false;
+  }
+  return !String(serverBaseUrl ?? "").trim();
+}

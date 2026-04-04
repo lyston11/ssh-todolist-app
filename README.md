@@ -18,6 +18,7 @@
 - `styles.css`: 样式
 - `app.js`: 前端编排入口
 - `frontend/`: API、realtime、state、ui、offline 分层代码
+- `scripts/build_web.mjs`: 生成独立 Web 分发目录
 - `scripts/prepare_mobile.mjs`: 生成 Capacitor Web 资源
 - `scripts/serve_web.mjs`: 本地静态预览服务
 - `android/`: Capacitor Android 工程
@@ -31,6 +32,15 @@ conda run -n ssh-todolist npm run web:serve
 ```
 
 默认会在 `4173` 端口启动静态服务。
+
+构建独立 Web 静态资源：
+
+```bash
+cd ssh-todolist-app
+conda run -n ssh-todolist npm run build
+```
+
+产物会输出到 `dist/`。
 
 ## 连接同步服务
 
@@ -173,4 +183,5 @@ conda run -n ssh-todolist npm run android:keystore
 cd ssh-todolist-app
 conda run -n ssh-todolist npm run check
 conda run -n ssh-todolist npm test
+conda run -n ssh-todolist npm run build
 ```

@@ -18,6 +18,7 @@ globalThis.localStorage = {
 const {
   loadOnboardingDismissed,
   saveOnboardingDismissed,
+  shouldDefaultToSettingsView,
   shouldShowOnboarding,
 } = await import("../frontend/onboarding.js");
 
@@ -60,4 +61,30 @@ test("onboarding dismissal persists", () => {
 
   saveOnboardingDismissed(false);
   assert.equal(loadOnboardingDismissed(), false);
+});
+
+test("mobile without a saved node defaults to settings view", () => {
+  assert.equal(
+    shouldDefaultToSettingsView({
+      isMobileLike: true,
+      serverBaseUrl: "",
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldDefaultToSettingsView({
+      isMobileLike: false,
+      serverBaseUrl: "",
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldDefaultToSettingsView({
+      isMobileLike: true,
+      serverBaseUrl: "http://100.88.77.66:8000",
+    }),
+    false,
+  );
 });

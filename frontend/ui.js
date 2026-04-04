@@ -24,10 +24,14 @@ const elements = {
   guideDiscoverNetworkButton: document.querySelector("#guide-discover-network"),
   guideOpenTasksButton: document.querySelector("#guide-open-tasks"),
   guidePasteConfigButton: document.querySelector("#guide-paste-config"),
+  connectionStatusTitle: document.querySelector("#connection-status-title"),
+  connectionStatusBody: document.querySelector("#connection-status-body"),
+  connectionStatusTags: document.querySelector("#connection-status-tags"),
   connectionForm: document.querySelector("#connection-form"),
   serverUrlInput: document.querySelector("#server-url-input"),
   serverTokenInput: document.querySelector("#server-token-input"),
   connectionConfigInput: document.querySelector("#connection-config-input"),
+  connectServerButton: document.querySelector("#connect-server-button"),
   testServerUrlButton: document.querySelector("#test-server-url"),
   fetchConnectionConfigButton: document.querySelector("#fetch-connection-config"),
   scanConnectionConfigButton: document.querySelector("#scan-connection-config"),
@@ -43,6 +47,11 @@ const elements = {
   connectionMessage: document.querySelector("#connection-message"),
   mobileNavButtons: document.querySelectorAll(".mobile-nav-button"),
   addListButton: document.querySelector("#add-list-button"),
+  editListButton: document.querySelector("#edit-list-button"),
+  deleteListButton: document.querySelector("#delete-list-button"),
+  activeListSummary: document.querySelector("#active-list-summary"),
+  activeListTitle: document.querySelector("#active-list-title"),
+  activeListMeta: document.querySelector("#active-list-meta"),
   listsTabs: document.querySelector("#lists-tabs"),
   syncQueueStatus: document.querySelector("#sync-queue-status"),
   fabButton: document.querySelector("#fab-button"),
@@ -50,8 +59,22 @@ const elements = {
   todoInput: document.querySelector("#todo-input"),
   todoList: document.querySelector("#todo-list"),
   todoCount: document.querySelector("#todo-count"),
+  todoPanelEyebrow: document.querySelector("#todo-panel-eyebrow"),
+  todoPanelTitle: document.querySelector("#todo-panel-title"),
+  todoPanelMeta: document.querySelector("#todo-panel-meta"),
+  toggleSelectionModeButton: document.querySelector("#toggle-selection-mode"),
+  batchToolbar: document.querySelector("#batch-toolbar"),
+  batchSelectionSummary: document.querySelector("#batch-selection-summary"),
+  selectVisibleTodosButton: document.querySelector("#select-visible-todos"),
+  clearSelectedTodosButton: document.querySelector("#clear-selected-todos"),
+  batchCompleteTodosButton: document.querySelector("#batch-complete-todos"),
+  batchUncompleteTodosButton: document.querySelector("#batch-uncomplete-todos"),
+  batchDeleteTodosButton: document.querySelector("#batch-delete-todos"),
+  batchMoveListSelect: document.querySelector("#batch-move-list-select"),
+  batchMoveTodosButton: document.querySelector("#batch-move-todos"),
   clearCompletedButton: document.querySelector("#clear-completed"),
   emptyState: document.querySelector("#empty-state"),
+  emptyStateText: document.querySelector("#empty-state-text"),
   syncStatus: document.querySelector("#sync-status"),
   filterButtons: document.querySelectorAll(".filter"),
   itemTemplate: document.querySelector("#todo-item-template"),
@@ -73,6 +96,10 @@ const elements = {
 let currentHandlers = null;
 
 function bindPress(element, handler) {
+  if (!element) {
+    return;
+  }
+
   let lastTouchAt = 0;
 
   element.addEventListener(
@@ -90,6 +117,47 @@ function bindPress(element, handler) {
       return;
     }
     await handler(event);
+  });
+}
+
+function bindDelegatedPress(container, selector, handler, { preventDefault = true } = {}) {
+  if (!container) {
+    return;
+  }
+
+  let lastTouchAt = 0;
+
+  const invoke = async (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const item = target.closest(selector);
+    if (!item || !container.contains(item)) {
+      return;
+    }
+
+    await handler(event, item, target);
+  };
+
+  container.addEventListener(
+    "touchend",
+    async (event) => {
+      lastTouchAt = Date.now();
+      if (preventDefault) {
+        event.preventDefault();
+      }
+      await invoke(event);
+    },
+    { passive: false },
+  );
+
+  container.addEventListener("click", async (event) => {
+    if (Date.now() - lastTouchAt < 700) {
+      return;
+    }
+    await invoke(event);
   });
 }
 
@@ -165,15 +233,11 @@ export function initUI(handlers) {
     }
   });
 
-  elements.guideFetchConfigButton.addEventListener("click", async () => {
-    await handlers.onFetchConnectionConfig(elements.serverUrlInput.value);
-  });
-
-  elements.guideConnectCurrentButton.addEventListener("click", async () => {
+  bindPress(elements.guideConnectCurrentButton, async () => {
     await handlers.onSaveServerUrl(elements.serverUrlInput.value, elements.serverTokenInput.value);
   });
 
-  elements.guideConnectRecentButton.addEventListener("click", async () => {
+  bindPress(elements.guideConnectRecentButton, async () => {
     const firstRecentConnection = handlers.getPreferredRecentConnection();
     if (!firstRecentConnection) {
       return;
@@ -181,61 +245,59 @@ export function initUI(handlers) {
     await handlers.onConnectRecentConnection(firstRecentConnection.serverBaseUrl);
   });
 
-  elements.guideScanConfigButton.addEventListener("click", async () => {
-    await handlers.onScanConnectionConfig();
-  });
-
-  elements.guideDiscoverNetworkButton.addEventListener("click", async () => {
-    await handlers.onRefreshNetworkSnapshot();
-  });
-
-  elements.guideOpenTasksButton.addEventListener("click", () => {
-    handlers.onViewChange("tasks");
-  });
-
-  elements.guidePasteConfigButton.addEventListener("click", async () => {
-    await handlers.onPasteConnectionConfig();
-  });
-
-  elements.testServerUrlButton.addEventListener("click", async () => {
-    await handlers.onTestServerUrl(elements.serverUrlInput.value, elements.serverTokenInput.value);
-  });
-
-  elements.fetchConnectionConfigButton.addEventListener("click", async () => {
+  bindPress(elements.guideFetchConfigButton, async () => {
     await handlers.onFetchConnectionConfig(elements.serverUrlInput.value);
   });
 
-  elements.scanConnectionConfigButton.addEventListener("click", async () => {
+  bindPress(elements.guideScanConfigButton, async () => {
     await handlers.onScanConnectionConfig();
   });
 
-  elements.importConnectionConfigButton.addEventListener("click", async () => {
-    await handlers.onImportConnectionConfig(elements.connectionConfigInput.value);
-  });
-
-  elements.pasteConnectionConfigButton.addEventListener("click", async () => {
-    await handlers.onPasteConnectionConfig();
-  });
-
-  elements.resetServerUrlButton.addEventListener("click", async () => {
-    await handlers.onResetServerUrl();
-  });
-
-  elements.refreshNetworkSnapshotButton.addEventListener("click", async () => {
+  bindPress(elements.guideDiscoverNetworkButton, async () => {
     await handlers.onRefreshNetworkSnapshot();
   });
 
-  elements.probeNetworkCandidatesButton.addEventListener("click", async () => {
+  bindPress(elements.guideOpenTasksButton, () => {
+    handlers.onViewChange("tasks");
+  });
+
+  bindPress(elements.guidePasteConfigButton, async () => {
+    await handlers.onPasteConnectionConfig();
+  });
+
+  bindPress(elements.testServerUrlButton, async () => {
+    await handlers.onTestServerUrl(elements.serverUrlInput.value, elements.serverTokenInput.value);
+  });
+
+  bindPress(elements.fetchConnectionConfigButton, async () => {
+    await handlers.onFetchConnectionConfig(elements.serverUrlInput.value);
+  });
+
+  bindPress(elements.scanConnectionConfigButton, async () => {
+    await handlers.onScanConnectionConfig();
+  });
+
+  bindPress(elements.importConnectionConfigButton, async () => {
+    await handlers.onImportConnectionConfig(elements.connectionConfigInput.value);
+  });
+
+  bindPress(elements.pasteConnectionConfigButton, async () => {
+    await handlers.onPasteConnectionConfig();
+  });
+
+  bindPress(elements.resetServerUrlButton, async () => {
+    await handlers.onResetServerUrl();
+  });
+
+  bindPress(elements.refreshNetworkSnapshotButton, async () => {
+    await handlers.onRefreshNetworkSnapshot();
+  });
+
+  bindPress(elements.probeNetworkCandidatesButton, async () => {
     await handlers.onProbeDiscoveryCandidates();
   });
 
-  elements.recentConnectionsList.addEventListener("click", async (event) => {
-    const target = event.target;
-    const item = target.closest(".recent-connection-card");
-    if (!item) {
-      return;
-    }
-
+  bindDelegatedPress(elements.recentConnectionsList, ".recent-connection-card", async (_event, item, target) => {
     const { serverBaseUrl } = item.dataset;
     if (!serverBaseUrl) {
       return;
@@ -251,13 +313,7 @@ export function initUI(handlers) {
     }
   });
 
-  elements.networkDiscoveryList.addEventListener("click", async (event) => {
-    const target = event.target;
-    const item = target.closest(".network-candidate-card");
-    if (!item) {
-      return;
-    }
-
+  bindDelegatedPress(elements.networkDiscoveryList, ".network-candidate-card", async (_event, item, target) => {
     const { serverBaseUrl } = item.dataset;
     if (!serverBaseUrl) {
       return;
@@ -269,16 +325,24 @@ export function initUI(handlers) {
   });
 
   elements.mobileNavButtons.forEach((button) => {
-    button.addEventListener("click", () => {
+    bindPress(button, () => {
       handlers.onViewChange(button.dataset.view);
     });
   });
 
-  elements.addListButton.addEventListener("click", () => {
+  bindPress(elements.addListButton, () => {
     handlers.onOpenListDialog();
   });
 
-  elements.fabButton.addEventListener("click", () => {
+  bindPress(elements.editListButton, () => {
+    handlers.onEditActiveList();
+  });
+
+  bindPress(elements.deleteListButton, async () => {
+    await handlers.onDeleteActiveList();
+  });
+
+  bindPress(elements.fabButton, () => {
     handlers.onOpenCreateDialog();
   });
 
@@ -287,45 +351,93 @@ export function initUI(handlers) {
     await handlers.onCreate(elements.todoInput.value);
   });
 
-  elements.clearCompletedButton.addEventListener("click", handlers.onClearCompleted);
+  bindPress(elements.clearCompletedButton, handlers.onClearCompleted);
+  bindPress(elements.toggleSelectionModeButton, () => {
+    handlers.onToggleSelectionMode();
+  });
+  bindPress(elements.selectVisibleTodosButton, () => {
+    handlers.onSelectVisibleTodos();
+  });
+  bindPress(elements.clearSelectedTodosButton, () => {
+    handlers.onClearSelectedTodos();
+  });
+  bindPress(elements.batchCompleteTodosButton, async () => {
+    await handlers.onBatchCompleteTodos();
+  });
+  bindPress(elements.batchUncompleteTodosButton, async () => {
+    await handlers.onBatchUncompleteTodos();
+  });
+  bindPress(elements.batchDeleteTodosButton, async () => {
+    await handlers.onBatchDeleteTodos();
+  });
+  bindPress(elements.batchMoveTodosButton, async () => {
+    await handlers.onBatchMoveTodos();
+  });
+
+  elements.batchMoveListSelect?.addEventListener("change", (event) => {
+    handlers.onBatchMoveListChange(event.target.value);
+  });
 
   elements.filterButtons.forEach((button) => {
-    button.addEventListener("click", () => {
+    bindPress(button, () => {
       handlers.onFilterChange(button.dataset.filter);
     });
   });
 
-  elements.todoList.addEventListener("click", async (event) => {
-    const target = event.target;
-    const item = target.closest(".todo-item");
-    if (!item) {
-      return;
-    }
+  bindDelegatedPress(
+    elements.todoList,
+    ".todo-item",
+    async (_event, item, target) => {
+      const todoId = item.dataset.todoId;
+      const isSelectionMode = item.dataset.selectionMode === "true";
+      const isSelected = item.dataset.selected === "true";
 
-    const todoId = item.dataset.todoId;
+      if (target.closest(".delete-button")) {
+        await handlers.onDelete(todoId);
+        return;
+      }
 
-    if (target.classList.contains("delete-button")) {
-      await handlers.onDelete(todoId);
-      return;
-    }
+      if (target.closest(".edit-button")) {
+        handlers.onOpenEdit(todoId);
+        return;
+      }
 
-    if (target.classList.contains("edit-button")) {
-      handlers.onOpenEdit(todoId);
-    }
-  });
+      if (target.closest(".todo-check") || target.closest(".todo-select")) {
+        return;
+      }
+
+      if (target.closest(".todo-content")) {
+        if (isSelectionMode) {
+          await handlers.onToggleTodoSelection(todoId, !isSelected);
+          return;
+        }
+
+        handlers.onOpenEdit(todoId);
+        return;
+      }
+
+      if (isSelectionMode && !target.closest(".todo-actions")) {
+        await handlers.onToggleTodoSelection(todoId, !isSelected);
+      }
+    },
+    { preventDefault: false },
+  );
 
   elements.todoList.addEventListener("change", async (event) => {
     const target = event.target;
-    if (!target.classList.contains("todo-toggle")) {
-      return;
-    }
-
     const item = target.closest(".todo-item");
     if (!item) {
       return;
     }
 
-    await handlers.onToggle(item.dataset.todoId, target.checked);
+    if (target.classList.contains("todo-toggle")) {
+      await handlers.onToggle(item.dataset.todoId, target.checked);
+      return;
+    }
+
+    if (target.classList.contains("todo-select-toggle")) {
+      await handlers.onToggleTodoSelection(item.dataset.todoId, target.checked);
+    }
   });
 
   elements.editForm.addEventListener("submit", async (event) => {
@@ -336,11 +448,11 @@ export function initUI(handlers) {
     });
   });
 
-  elements.cancelEditButton.addEventListener("click", () => {
+  bindPress(elements.cancelEditButton, () => {
     handlers.onCancelEdit();
   });
 
-  elements.closeEditorButton.addEventListener("click", () => {
+  bindPress(elements.closeEditorButton, () => {
     handlers.onCancelEdit();
   });
 
@@ -353,11 +465,11 @@ export function initUI(handlers) {
     await handlers.onSaveList(elements.listInput.value);
   });
 
-  elements.closeListEditorButton.addEventListener("click", () => {
+  bindPress(elements.closeListEditorButton, () => {
     handlers.onCancelListEdit();
   });
 
-  elements.cancelListEditButton.addEventListener("click", () => {
+  bindPress(elements.cancelListEditButton, () => {
     handlers.onCancelListEdit();
   });
 
@@ -372,6 +484,7 @@ export function renderApp(state) {
   renderActiveView(state.activeView);
   renderLists(state, currentHandlers);
   renderFilters(state.currentFilter);
+  renderBatchToolbar(state);
   renderTodos(state);
   renderSyncState(state.syncState);
   renderPendingOperations(state.pendingOperations);
@@ -468,6 +581,7 @@ export function closeListDialog() {
 
 function renderConnection(state) {
   renderConnectionGuide(state, currentHandlers);
+  renderConnectionStatusCard(state);
   elements.serverUrlInput.value = state.serverDraftUrl;
   elements.serverTokenInput.value = state.serverDraftToken;
   elements.connectionConfigInput.value = state.connectionConfigDraft;
@@ -477,6 +591,7 @@ function renderConnection(state) {
   renderNetworkDiscovery(state);
 
   const isTesting = state.serverConnectionState === "testing";
+  elements.connectServerButton.disabled = isTesting;
   elements.testServerUrlButton.disabled = isTesting;
   elements.fetchConnectionConfigButton.disabled = isTesting;
   elements.scanConnectionConfigButton.disabled = isTesting;
@@ -485,6 +600,75 @@ function renderConnection(state) {
   elements.resetServerUrlButton.disabled = isTesting;
   elements.refreshNetworkSnapshotButton.disabled = isTesting || state.discoveryState === "testing";
   elements.probeNetworkCandidatesButton.disabled = isTesting || state.discoveryState === "testing";
+}
+
+function renderConnectionStatusCard(state) {
+  const model = buildConnectionStatusModel(state);
+
+  elements.connectionStatusTitle.textContent = model.title;
+  elements.connectionStatusBody.textContent = model.body;
+  elements.connectionStatusTags.innerHTML = "";
+
+  model.tags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.className = "connection-status-tag";
+    chip.dataset.tone = tag.tone;
+    chip.textContent = tag.label;
+    elements.connectionStatusTags.append(chip);
+  });
+}
+
+function buildConnectionStatusModel(state) {
+  const currentNode = state.serverBaseUrl || state.serverDraftUrl || "";
+  const hasToken = Boolean((state.serverToken || state.serverDraftToken || "").trim());
+  const baseTags = [
+    {
+      label: hasToken ? "已填写 token" : "未填写 token",
+      tone: hasToken ? "ready" : "neutral",
+    },
+    {
+      label: `${state.pendingOperations} 个待同步操作`,
+      tone: state.pendingOperations > 0 ? "warning" : "neutral",
+    },
+  ];
+
+  if (!currentNode) {
+    return {
+      title: "还没有连接节点",
+      body: "先接入一个同步节点，后续最近连接、候选节点和离线缓存都会围绕这个节点工作。",
+      tags: [{ label: "未配置节点", tone: "danger" }, ...baseTags],
+    };
+  }
+
+  if (state.serverConnectionState === "testing" || state.syncState === "connecting") {
+    return {
+      title: `正在检查 ${currentNode}`,
+      body: "正在验证节点、拉取快照或恢复实时同步连接，请稍等。",
+      tags: [{ label: "连接中", tone: "warning" }, ...baseTags, { label: currentNode, tone: "neutral" }],
+    };
+  }
+
+  if (state.syncState === "online") {
+    return {
+      title: "实时同步已经就绪",
+      body: `当前节点 ${currentNode} 已连通，这台设备上的本地缓存和同步队列都绑定到这个节点。`,
+      tags: [{ label: "在线", tone: "ready" }, ...baseTags, { label: currentNode, tone: "neutral" }],
+    };
+  }
+
+  if (state.serverConnectionState === "error" || state.syncState === "offline") {
+    return {
+      title: "当前节点暂时不可用",
+      body: `节点 ${currentNode} 当前不可用，但本地改动仍会进入离线队列，等连接恢复后继续同步。`,
+      tags: [{ label: "离线", tone: "danger" }, ...baseTags, { label: currentNode, tone: "neutral" }],
+    };
+  }
+
+  return {
+    title: `已选中节点 ${currentNode}`,
+    body: "节点地址已经就绪。你可以继续测试、拉取服务端配置，或者直接建立连接。",
+    tags: [{ label: "待连接", tone: "neutral" }, ...baseTags],
+  };
 }
 
 function renderConnectionGuide(state, handlers) {
@@ -688,8 +872,28 @@ function renderActiveView(activeView) {
 
 function renderLists(state, handlers) {
   elements.listsTabs.innerHTML = "";
+  const activeList = state.lists.find((list) => list.id === state.activeListId) ?? state.lists[0] ?? null;
+  const canManageLists = state.lists.length > 0;
+  const canDeleteList = state.lists.length > 1 && activeList !== null;
+
+  elements.activeListSummary.hidden = !canManageLists;
+  elements.editListButton.disabled = !canManageLists;
+  elements.deleteListButton.disabled = !canDeleteList;
+
+  if (activeList) {
+    const totalCount = state.todos.filter((todo) => todo.listId === activeList.id).length;
+    const activeCount = state.todos.filter((todo) => todo.listId === activeList.id && !todo.completed).length;
+    const completedCount = totalCount - activeCount;
+
+    elements.activeListTitle.textContent = activeList.title;
+    elements.activeListMeta.textContent = `${totalCount} 项任务 · ${activeCount} 项待完成 · ${completedCount} 项已完成`;
+  } else {
+    elements.activeListTitle.textContent = "还没有清单";
+    elements.activeListMeta.textContent = "新建一个清单后，就可以按项目或场景管理待办。";
+  }
 
   state.lists.forEach((list) => {
+    const listTodoCount = state.todos.filter((todo) => todo.listId === list.id && !todo.completed).length;
     const button = document.createElement("button");
     button.type = "button";
     button.className = "list-tab";
@@ -697,8 +901,17 @@ function renderLists(state, handlers) {
       button.classList.add("is-active");
     }
     button.dataset.listId = list.id;
-    button.textContent = list.title;
-    button.addEventListener("click", () => {
+
+    const title = document.createElement("span");
+    title.className = "list-tab-title";
+    title.textContent = list.title;
+
+    const count = document.createElement("span");
+    count.className = "list-tab-count";
+    count.textContent = String(listTodoCount);
+
+    button.append(title, count);
+    bindPress(button, () => {
       handlers.onSelectList(list.id);
     });
     button.addEventListener("contextmenu", (event) => {
@@ -715,37 +928,101 @@ function renderFilters(currentFilter) {
   });
 }
 
-function renderTodos(state) {
-  const visibleTodos = state.activeListId
-    ? state.todos.filter((todo) => todo.listId === state.activeListId)
-    : state.todos;
+function renderBatchToolbar(state) {
+  const visibleTodos = getVisibleTodos(state);
   const filteredTodos = getFilteredTodos(visibleTodos, state.currentFilter);
+  const selectedTodoIds = new Set(state.selectedTodoIds);
+  const selectedTodos = filteredTodos.filter((todo) => selectedTodoIds.has(todo.id));
+  const hasVisibleTodos = filteredTodos.length > 0;
+  const hasSelectedTodos = selectedTodos.length > 0;
+  const hasIncompleteSelectedTodos = selectedTodos.some((todo) => !todo.completed);
+  const hasCompletedSelectedTodos = selectedTodos.some((todo) => todo.completed);
+  const canMoveSelectedTodos =
+    hasSelectedTodos &&
+    Boolean(state.batchMoveListId) &&
+    selectedTodos.some((todo) => todo.listId !== state.batchMoveListId);
+
+  elements.batchToolbar.hidden = !state.selectionMode;
+  elements.toggleSelectionModeButton.textContent = state.selectionMode ? "完成批量" : "批量操作";
+  elements.toggleSelectionModeButton.classList.toggle("is-active", state.selectionMode);
+  elements.toggleSelectionModeButton.disabled = !state.selectionMode && !hasVisibleTodos;
+  elements.batchSelectionSummary.textContent = buildBatchSelectionSummary({
+    hasVisibleTodos,
+    visibleCount: filteredTodos.length,
+    selectedCount: selectedTodos.length,
+  });
+
+  elements.selectVisibleTodosButton.disabled = !hasVisibleTodos || selectedTodos.length === filteredTodos.length;
+  elements.clearSelectedTodosButton.disabled = !hasSelectedTodos;
+  elements.batchCompleteTodosButton.disabled = !hasIncompleteSelectedTodos;
+  elements.batchUncompleteTodosButton.disabled = !hasCompletedSelectedTodos;
+  elements.batchDeleteTodosButton.disabled = !hasSelectedTodos;
+
+  renderBatchMoveOptions(state, selectedTodos);
+  elements.batchMoveTodosButton.disabled = !canMoveSelectedTodos;
+}
+
+function renderTodos(state) {
+  const visibleTodos = getVisibleTodos(state);
+  const filteredTodos = getFilteredTodos(visibleTodos, state.currentFilter);
+  const listTitleById = new Map(state.lists.map((list) => [list.id, list.title]));
+  const selectedTodoIds = new Set(state.selectedTodoIds);
   elements.todoList.innerHTML = "";
 
   filteredTodos.forEach((todo) => {
     const itemFragment = elements.itemTemplate.content.cloneNode(true);
     const item = itemFragment.querySelector(".todo-item");
+    const selectToggle = itemFragment.querySelector(".todo-select-toggle");
     const title = itemFragment.querySelector(".todo-title");
+    const statusBadge = itemFragment.querySelector(".todo-status-badge");
+    const listBadge = itemFragment.querySelector(".todo-list-badge");
     const meta = itemFragment.querySelector(".todo-meta");
     const toggle = itemFragment.querySelector(".todo-toggle");
+    const isSelected = selectedTodoIds.has(todo.id);
 
     item.dataset.todoId = todo.id;
+    item.dataset.selectionMode = state.selectionMode ? "true" : "false";
+    item.dataset.selected = isSelected ? "true" : "false";
     item.classList.toggle("is-completed", todo.completed);
+    item.classList.toggle("is-selected", isSelected);
     title.textContent = todo.title;
+    statusBadge.textContent = todo.completed ? "已完成" : "进行中";
+    statusBadge.dataset.tone = todo.completed ? "completed" : "active";
+    listBadge.textContent = listTitleById.get(todo.listId) ?? "未知清单";
     meta.textContent = todo.completed
-      ? `已完成于 ${formatDate(todo.completedAt ?? todo.createdAt)}`
-      : `创建于 ${formatDate(todo.createdAt)}`;
+      ? `已完成于 ${formatDate(todo.completedAt ?? todo.updatedAt ?? todo.createdAt)} · 创建于 ${formatDate(todo.createdAt)}`
+      : `创建于 ${formatDate(todo.createdAt)} · 最近更新 ${formatDate(todo.updatedAt ?? todo.createdAt)}`;
     toggle.checked = todo.completed;
+    toggle.disabled = state.selectionMode;
+    selectToggle.checked = isSelected;
 
     elements.todoList.append(itemFragment);
   });
 
   const activeCount = visibleTodos.filter((todo) => !todo.completed).length;
   const hasVisibleTodos = filteredTodos.length > 0;
+  renderTodoPanelHeader(state, visibleTodos, filteredTodos);
 
   elements.todoCount.textContent = `${activeCount} 个待完成`;
   elements.emptyState.classList.toggle("is-visible", !hasVisibleTodos);
+  elements.emptyStateText.textContent = buildEmptyStateMessage(state, visibleTodos, filteredTodos);
   elements.clearCompletedButton.disabled = !visibleTodos.some((todo) => todo.completed);
+}
+
+function renderTodoPanelHeader(state, visibleTodos, filteredTodos) {
+  const activeList = state.lists.find((list) => list.id === state.activeListId) ?? null;
+  const filterLabel = getFilterLabel(state.currentFilter);
+  const completedCount = visibleTodos.filter((todo) => todo.completed).length;
+
+  elements.todoPanelEyebrow.textContent = activeList ? `当前清单 · ${filterLabel}` : `任务视图 · ${filterLabel}`;
+  elements.todoPanelTitle.textContent = activeList ? activeList.title : "全部任务";
+  elements.todoPanelMeta.textContent = buildTodoPanelMeta({
+    syncState: state.syncState,
+    visibleCount: visibleTodos.length,
+    filteredCount: filteredTodos.length,
+    completedCount,
+    filterLabel,
+  });
 }
 
 function renderSyncState(syncState) {
@@ -780,6 +1057,45 @@ function renderEditorLists(lists, activeListId) {
   });
 }
 
+function renderBatchMoveOptions(state, selectedTodos) {
+  elements.batchMoveListSelect.innerHTML = "";
+
+  if (state.lists.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "还没有可移动的清单";
+    elements.batchMoveListSelect.append(option);
+    elements.batchMoveListSelect.disabled = true;
+    return;
+  }
+
+  const selectedSourceListIds = new Set(selectedTodos.map((todo) => todo.listId));
+  const fallbackValue =
+    state.batchMoveListId && state.lists.some((list) => list.id === state.batchMoveListId)
+      ? state.batchMoveListId
+      : state.lists[0]?.id ?? "";
+
+  state.lists.forEach((list) => {
+    const option = document.createElement("option");
+    option.value = list.id;
+    option.textContent = list.title;
+    option.disabled = selectedSourceListIds.size > 0 && selectedSourceListIds.size === 1 && selectedSourceListIds.has(list.id);
+    option.selected = list.id === fallbackValue;
+    elements.batchMoveListSelect.append(option);
+  });
+
+  elements.batchMoveListSelect.disabled = state.lists.length < 2;
+
+  if (elements.batchMoveListSelect.value !== fallbackValue) {
+    const firstEnabledOption = Array.from(elements.batchMoveListSelect.options).find((option) => !option.disabled);
+    elements.batchMoveListSelect.value = firstEnabledOption?.value ?? fallbackValue;
+  }
+}
+
+function getVisibleTodos(state) {
+  return state.activeListId ? state.todos.filter((todo) => todo.listId === state.activeListId) : state.todos;
+}
+
 function getFilteredTodos(todos, currentFilter) {
   if (currentFilter === "active") {
     return todos.filter((todo) => !todo.completed);
@@ -799,4 +1115,57 @@ function formatDate(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(timestamp);
+}
+
+function getFilterLabel(currentFilter) {
+  if (currentFilter === "active") {
+    return "进行中";
+  }
+  if (currentFilter === "completed") {
+    return "已完成";
+  }
+  return "全部";
+}
+
+function buildTodoPanelMeta({ syncState, visibleCount, filteredCount, completedCount, filterLabel }) {
+  const syncLabel =
+    syncState === "online" ? "实时同步中" : syncState === "offline" ? "当前离线" : "正在建立连接";
+
+  if (visibleCount === 0) {
+    return `${syncLabel} · 当前还没有任务`;
+  }
+
+  return `${syncLabel} · 共 ${visibleCount} 项任务 · ${completedCount} 项已完成 · 当前筛选显示 ${filteredCount} 项（${filterLabel}）`;
+}
+
+function buildBatchSelectionSummary({ hasVisibleTodos, visibleCount, selectedCount }) {
+  if (!hasVisibleTodos) {
+    return "当前视图没有可批量操作的任务";
+  }
+
+  if (selectedCount === 0) {
+    return `已进入批量模式，当前视图共有 ${visibleCount} 项任务`;
+  }
+
+  return `已选择 ${selectedCount} 项任务，当前视图共有 ${visibleCount} 项`;
+}
+
+function buildEmptyStateMessage(state, visibleTodos, filteredTodos) {
+  if (!state.serverBaseUrl) {
+    return "先去设置页连接同步节点，再开始管理任务。";
+  }
+
+  if (visibleTodos.length === 0) {
+    return "这个清单还没有任务。先写下今天最重要的一件事。";
+  }
+
+  if (filteredTodos.length === 0 && state.currentFilter === "active") {
+    return "当前筛选下没有进行中的任务，这个清单已经清空了。";
+  }
+
+  if (filteredTodos.length === 0 && state.currentFilter === "completed") {
+    return "当前筛选下还没有已完成任务。";
+  }
+
+  return "还没有任务。先写下今天最重要的一件事。";
 }

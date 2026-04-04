@@ -1,9 +1,10 @@
-import { shouldShowOnboarding } from "./frontend/onboarding.js";
+import { shouldDefaultToSettingsView, shouldShowOnboarding } from "./frontend/onboarding.js";
 import {
   ApiError,
   clearCompletedTodos,
   createList,
   createTodo,
+  deleteList,
   deleteTodo,
   fetchConnectConfig,
   fetchMeta,
@@ -36,6 +37,7 @@ import { QrScanCancelledError, scanConnectionQrCode } from "./frontend/qr_scanne
 import { removeRecentConnection, saveRecentConnection } from "./frontend/recent_connections.js";
 import { connectRealtime } from "./frontend/realtime.js";
 import {
+  clearSelectedTodoIds,
   setDiscoveryCandidates,
   setDiscoveryState,
   getState,
@@ -49,6 +51,7 @@ import {
   sanitizeServerToken,
   setActiveListId,
   setActiveView,
+  setBatchMoveListId,
   setCurrentFilter,
   setEditingListId,
   setEditingTodoId,
@@ -62,10 +65,13 @@ import {
   setServerBaseUrl,
   setServerDraftUrl,
   setServerDraftToken,
+  setSelectionMode,
   setSocketConfig,
+  setSelectedTodoIds,
   setSyncState,
   setServerToken,
   setTodos,
+  toggleSelectedTodoId,
 } from "./frontend/state.js";
 import {
   closeEditDialog,
@@ -104,11 +110,22 @@ initUI({
   onSelectList: handleSelectList,
   onCreate: handleQuickCreate,
   onClearCompleted: handleClearCompleted,
+  onToggleSelectionMode: handleToggleSelectionMode,
+  onSelectVisibleTodos: handleSelectVisibleTodos,
+  onClearSelectedTodos: handleClearSelectedTodos,
   onFilterChange: handleFilterChange,
+  onToggleTodoSelection: handleToggleTodoSelection,
+  onBatchCompleteTodos: handleBatchCompleteTodos,
+  onBatchUncompleteTodos: handleBatchUncompleteTodos,
+  onBatchDeleteTodos: handleBatchDeleteTodos,
+  onBatchMoveListChange: handleBatchMoveListChange,
+  onBatchMoveTodos: handleBatchMoveTodos,
   onDelete: handleDelete,
   onOpenEdit: handleOpenEdit,
   onOpenCreateDialog: handleOpenCreateDialog,
   onOpenListDialog: handleOpenListDialog,
+  onEditActiveList: handleEditActiveList,
+  onDeleteActiveList: handleDeleteActiveList,
   onToggle: handleToggle,
   onSaveEdit: handleSaveEdit,
   onCancelEdit: handleCancelEdit,
@@ -479,6 +496,7 @@ async function handleResetServerUrl() {
   const previousServerToken = getState().serverToken;
   resetServerBaseUrl();
   resetServerToken();
+  resetBatchSelection({ disableMode: true });
   setConnectionConfigDraft("");
   realtimeConnection?.disconnect();
   realtimeConnection = null;
@@ -504,18 +522,161 @@ async function handleResetServerUrl() {
 }
 
 function handleViewChange(view) {
+  if (view !== "tasks") {
+    resetBatchSelection({ disableMode: true });
+  }
   setActiveView(view);
   render();
 }
 
 function handleFilterChange(filter) {
+  resetBatchSelection({ disableMode: true });
   setCurrentFilter(filter);
   render();
 }
 
 function handleSelectList(listId) {
+  resetBatchSelection({ disableMode: true });
   setActiveListId(listId);
+  syncBatchMoveTarget();
   render();
+}
+
+function handleToggleSelectionMode() {
+  if (getState().selectionMode) {
+    resetBatchSelection({ disableMode: true });
+  } else {
+    setSelectionMode(true);
+    syncBatchMoveTarget();
+  }
+  render();
+}
+
+function handleSelectVisibleTodos() {
+  const visibleTodoIds = getCurrentViewTodos().map((todo) => todo.id);
+  setSelectionMode(true);
+  setSelectedTodoIds(visibleTodoIds);
+  syncBatchMoveTarget();
+  render();
+}
+
+function handleClearSelectedTodos() {
+  clearSelectedTodoIds();
+  syncBatchMoveTarget();
+  render();
+}
+
+function handleToggleTodoSelection(todoId, selected) {
+  if (selected) {
+    setSelectionMode(true);
+  }
+  toggleSelectedTodoId(todoId, selected);
+  syncBatchMoveTarget();
+  render();
+}
+
+async function handleBatchCompleteTodos() {
+  const selectedTodos = getSelectedTodos().filter((todo) => !todo.completed);
+  if (selectedTodos.length === 0) {
+    return;
+  }
+
+  await executeBatchTodoOperations({
+    operations: selectedTodos.map((todo) => ({
+      kind: "updateTodo",
+      payload: { todoId: todo.id, completed: true },
+    })),
+    optimisticApply: () => {
+      applyTodoPatches(
+        selectedTodos.map((todo) => ({
+          todoId: todo.id,
+          completed: true,
+          completedAt: Date.now(),
+        })),
+      );
+    },
+    offlineMessage: "批量完成已离线保存，恢复连接后会继续同步。",
+  });
+}
+
+async function handleBatchUncompleteTodos() {
+  const selectedTodos = getSelectedTodos().filter((todo) => todo.completed);
+  if (selectedTodos.length === 0) {
+    return;
+  }
+
+  await executeBatchTodoOperations({
+    operations: selectedTodos.map((todo) => ({
+      kind: "updateTodo",
+      payload: { todoId: todo.id, completed: false },
+    })),
+    optimisticApply: () => {
+      applyTodoPatches(
+        selectedTodos.map((todo) => ({
+          todoId: todo.id,
+          completed: false,
+          completedAt: null,
+        })),
+      );
+    },
+    offlineMessage: "批量恢复已离线保存，恢复连接后会继续同步。",
+  });
+}
+
+async function handleBatchDeleteTodos() {
+  const selectedTodoIds = getSelectedTodoIds();
+  if (selectedTodoIds.length === 0) {
+    return;
+  }
+
+  const confirmed =
+    typeof globalThis.confirm !== "function"
+      ? true
+      : globalThis.confirm(`确定删除已选择的 ${selectedTodoIds.length} 项任务吗？`);
+  if (!confirmed) {
+    return;
+  }
+
+  await executeBatchTodoOperations({
+    operations: selectedTodoIds.map((todoId) => ({
+      kind: "deleteTodo",
+      payload: { todoId },
+    })),
+    optimisticApply: () => {
+      const selectedTodoIdSet = new Set(selectedTodoIds);
+      setTodos(getState().todos.filter((todo) => !selectedTodoIdSet.has(todo.id)));
+    },
+    offlineMessage: "批量删除已离线保存，恢复连接后会继续同步。",
+  });
+}
+
+function handleBatchMoveListChange(listId) {
+  setBatchMoveListId(listId);
+  render();
+}
+
+async function handleBatchMoveTodos() {
+  const targetListId = getState().batchMoveListId;
+  const selectedTodos = getSelectedTodos().filter((todo) => todo.listId !== targetListId);
+  if (!targetListId || selectedTodos.length === 0) {
+    return;
+  }
+
+  await executeBatchTodoOperations({
+    operations: selectedTodos.map((todo) => ({
+      kind: "updateTodo",
+      payload: { todoId: todo.id, listId: targetListId },
+    })),
+    optimisticApply: () => {
+      applyTodoPatches(
+        selectedTodos.map((todo) => ({
+          todoId: todo.id,
+          listId: targetListId,
+        })),
+      );
+    },
+    offlineMessage: "批量移动已离线保存，恢复连接后会继续同步。",
+  });
 }
 
 async function handleQuickCreate(rawValue) {
@@ -615,6 +776,15 @@ function handleOpenListDialog(listId = null) {
   openListDialog({ mode: "create", title: "" });
 }
 
+function handleEditActiveList() {
+  const activeListId = getActiveListId();
+  if (!activeListId) {
+    return;
+  }
+
+  handleOpenListDialog(activeListId);
+}
+
 async function handleSaveList(rawValue) {
   const title = rawValue.trim();
   if (!title) {
@@ -670,6 +840,39 @@ function handleCancelListEdit() {
 
 function handleListDialogClose() {
   setEditingListId(null);
+}
+
+async function handleDeleteActiveList() {
+  const activeListId = getActiveListId();
+  if (!activeListId) {
+    return;
+  }
+
+  if (getState().lists.length <= 1) {
+    failConnection("至少保留一个清单后才能继续使用。");
+    return;
+  }
+
+  const activeList = getState().lists.find((list) => list.id === activeListId);
+  const confirmed =
+    typeof globalThis.confirm !== "function"
+      ? true
+      : globalThis.confirm(`删除清单“${activeList?.title ?? "当前清单"}”后，其中任务也会一起删除。确定继续吗？`);
+
+  if (!confirmed) {
+    return;
+  }
+
+  await executeOrQueue({
+    kind: "deleteList",
+    payload: { listId: activeListId },
+    optimisticApply: () => {
+      const remainingLists = getState().lists.filter((list) => list.id !== activeListId);
+      setLists(remainingLists);
+      setTodos(getState().todos.filter((todo) => todo.listId !== activeListId));
+      setActiveListId(remainingLists[0]?.id ?? null);
+    },
+  });
 }
 
 async function handleDelete(todoId) {
@@ -739,6 +942,8 @@ async function updateOrQueueTodo(todoId, patch) {
 async function executeOrQueue({ kind, payload, optimisticApply }) {
   const previousSnapshot = captureLocalSnapshot();
   optimisticApply();
+  syncBatchSelection({ visibleOnly: true });
+  syncBatchMoveTarget();
   persistCurrentSnapshot();
   render();
 
@@ -756,6 +961,43 @@ async function executeOrQueue({ kind, payload, optimisticApply }) {
     enqueueOperation(getState().serverBaseUrl, getState().serverToken, { kind, payload });
     setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
     handleSyncError(error, "已离线保存，本地修改会在恢复连接后自动同步。");
+  }
+}
+
+async function executeBatchTodoOperations({ operations, optimisticApply, offlineMessage }) {
+  if (operations.length === 0) {
+    return;
+  }
+
+  const previousSnapshot = captureLocalSnapshot();
+  optimisticApply();
+  clearSelectedTodoIds();
+  syncBatchSelection({ visibleOnly: true });
+  syncBatchMoveTarget();
+  persistCurrentSnapshot();
+  render();
+
+  let completedCount = 0;
+
+  try {
+    for (const operation of operations) {
+      await runServerMutation(operation.kind, operation.payload);
+      completedCount += 1;
+    }
+    await refreshSnapshot();
+  } catch (error) {
+    if (isAuthError(error)) {
+      restoreLocalSnapshot(previousSnapshot);
+      persistCurrentSnapshot();
+      handleSyncError(error, "Token 无效或缺失，请重新填写后再连接。");
+      return;
+    }
+
+    operations.slice(completedCount).forEach((operation) => {
+      enqueueOperation(getState().serverBaseUrl, getState().serverToken, operation);
+    });
+    setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
+    handleSyncError(error, offlineMessage);
   }
 }
 
@@ -783,6 +1025,7 @@ async function connectToServer(
     }
 
     await refreshSnapshot(serverBaseUrl, serverToken);
+    resetBatchSelection({ disableMode: true });
     setServerConnectionState("connected");
     setServerConnectionMessage(`已连接节点：${serverBaseUrl}`);
     setOnboardingDismissed(true);
@@ -894,6 +1137,11 @@ async function runServerMutation(
 
   if (kind === "updateList") {
     await updateList(serverBaseUrl, serverToken, payload.listId, { title: payload.title });
+    return;
+  }
+
+  if (kind === "deleteList") {
+    await deleteList(serverBaseUrl, serverToken, payload.listId);
   }
 }
 
@@ -919,6 +1167,8 @@ function applySnapshot(
   setActiveListId(nextActiveListId);
   setPendingOperations(loadPendingOperations(serverBaseUrl, serverToken).length);
   setSyncState("online");
+  syncBatchSelection({ visibleOnly: true });
+  syncBatchMoveTarget();
 }
 
 function persistCurrentSnapshot(
@@ -977,6 +1227,9 @@ function captureLocalSnapshot() {
     lists: getState().lists.map((list) => ({ ...list })),
     todos: getState().todos.map((todo) => ({ ...todo })),
     activeListId: getState().activeListId,
+    selectionMode: getState().selectionMode,
+    selectedTodoIds: [...getState().selectedTodoIds],
+    batchMoveListId: getState().batchMoveListId,
   };
 }
 
@@ -984,6 +1237,11 @@ function restoreLocalSnapshot(snapshot) {
   setLists(snapshot.lists);
   setTodos(snapshot.todos);
   setActiveListId(snapshot.activeListId);
+  setSelectionMode(snapshot.selectionMode ?? false);
+  setSelectedTodoIds(snapshot.selectedTodoIds ?? []);
+  setBatchMoveListId(snapshot.batchMoveListId ?? "");
+  syncBatchSelection({ visibleOnly: true });
+  syncBatchMoveTarget();
 }
 
 function isAuthError(error) {
@@ -1079,6 +1337,114 @@ function validateServerBaseUrl(rawValue) {
   }
 }
 
+function getCurrentViewTodos(state = getState()) {
+  const visibleTodos = state.activeListId ? state.todos.filter((todo) => todo.listId === state.activeListId) : state.todos;
+  return filterTodos(visibleTodos, state.currentFilter);
+}
+
+function filterTodos(todos, filter) {
+  if (filter === "active") {
+    return todos.filter((todo) => !todo.completed);
+  }
+
+  if (filter === "completed") {
+    return todos.filter((todo) => todo.completed);
+  }
+
+  return todos;
+}
+
+function getSelectedTodoIds() {
+  const selectableTodoIds = new Set(getCurrentViewTodos().map((todo) => todo.id));
+  return getState().selectedTodoIds.filter((todoId) => selectableTodoIds.has(todoId));
+}
+
+function getSelectedTodos() {
+  const selectedTodoIdSet = new Set(getSelectedTodoIds());
+  return getState().todos.filter((todo) => selectedTodoIdSet.has(todo.id));
+}
+
+function resetBatchSelection({ disableMode = false } = {}) {
+  clearSelectedTodoIds();
+  if (disableMode) {
+    setSelectionMode(false);
+  }
+  syncBatchMoveTarget();
+}
+
+function syncBatchSelection({ visibleOnly = false } = {}) {
+  if (!getState().selectionMode && getState().selectedTodoIds.length > 0) {
+    clearSelectedTodoIds();
+    return;
+  }
+
+  const allowedTodoIds = new Set(
+    (visibleOnly ? getCurrentViewTodos() : getState().todos).map((todo) => todo.id),
+  );
+  setSelectedTodoIds(getState().selectedTodoIds.filter((todoId) => allowedTodoIds.has(todoId)));
+}
+
+function syncBatchMoveTarget() {
+  setBatchMoveListId(resolveBatchMoveListId());
+}
+
+function resolveBatchMoveListId() {
+  const { lists, batchMoveListId } = getState();
+  if (lists.length === 0) {
+    return "";
+  }
+
+  if (batchMoveListId && lists.some((list) => list.id === batchMoveListId)) {
+    return batchMoveListId;
+  }
+
+  const selectedSourceListIds = new Set(getSelectedTodos().map((todo) => todo.listId));
+  const firstOtherList = lists.find((list) => !selectedSourceListIds.has(list.id));
+  if (firstOtherList) {
+    return firstOtherList.id;
+  }
+
+  const activeListId = getActiveListId();
+  return lists.find((list) => list.id === activeListId)?.id ?? lists[0]?.id ?? "";
+}
+
+function applyTodoPatches(patches) {
+  const patchByTodoId = new Map(
+    patches.map((patch) => [
+      patch.todoId,
+      {
+        title: patch.title,
+        listId: patch.listId,
+        completed: patch.completed,
+        completedAt: patch.completedAt,
+      },
+    ]),
+  );
+
+  setTodos(
+    getState().todos.map((todo) => {
+      const patch = patchByTodoId.get(todo.id);
+      if (!patch) {
+        return todo;
+      }
+
+      return {
+        ...todo,
+        ...(patch.title === undefined ? {} : { title: patch.title }),
+        ...(patch.listId === undefined ? {} : { listId: patch.listId }),
+        ...(patch.completed === undefined ? {} : { completed: patch.completed }),
+        updatedAt: Date.now(),
+        completedAt:
+          patch.completed === true
+            ? (patch.completedAt ?? Date.now())
+            : patch.completed === false
+              ? null
+              : todo.completedAt,
+      };
+    }),
+  );
+}
+
 function isTodoRecord(value) {
   return (
     value &&
@@ -1109,23 +1475,28 @@ function render() {
 }
 
 function syncOnboardingVisibility() {
+  const isMobileLike = isNativeApp() || (globalThis.matchMedia?.("(max-width: 720px)")?.matches ?? false);
   const shouldShow = shouldShowOnboarding({
     dismissed: getState().onboardingDismissed,
     serverBaseUrl: getState().serverBaseUrl,
     recentConnections: getState().recentConnections,
   });
 
-  const useInlineFallback =
-    shouldShow &&
-    (isNativeApp() || (globalThis.matchMedia?.("(max-width: 720px)")?.matches ?? false));
+  if (
+    shouldDefaultToSettingsView({
+      isMobileLike,
+      serverBaseUrl: getState().serverBaseUrl,
+    })
+  ) {
+    setActiveView("settings");
+    setServerConnectionState("idle");
+    setServerConnectionMessage("请先在设置页完成节点接入。");
+  }
+
+  const useInlineFallback = shouldShow && isMobileLike;
 
   if (useInlineFallback) {
     setOnboardingVisible(false);
-    if (!getState().serverBaseUrl) {
-      setActiveView("settings");
-      setServerConnectionState("idle");
-      setServerConnectionMessage("请先在设置页完成第一次节点接入。");
-    }
     return;
   }
 

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js frontend/api.js frontend/connection_config.js frontend/connection_link.js frontend/discovery.js frontend/lifecycle.js frontend/native_bridge.js frontend/offline.js frontend/onboarding.js frontend/qr_scanner.js frontend/realtime.js frontend/recent_connections.js frontend/state.js frontend/ui.js scripts/build_android.mjs scripts/generate_keystore.mjs scripts/prepare_mobile.mjs scripts/serve_web.mjs",
+    "build": "node scripts/build_web.mjs",
+    "check": "node --check app.js frontend/api.js frontend/connection_config.js frontend/connection_link.js frontend/discovery.js frontend/lifecycle.js frontend/native_bridge.js frontend/offline.js frontend/onboarding.js frontend/qr_scanner.js frontend/realtime.js frontend/recent_connections.js frontend/state.js frontend/ui.js scripts/build_android.mjs scripts/build_web.mjs scripts/generate_keystore.mjs scripts/lib/copy_web_assets.mjs scripts/prepare_mobile.mjs scripts/serve_web.mjs",
     "test": "node --test tests/*.test.mjs",
     "web:serve": "node scripts/serve_web.mjs",
     "mobile:prepare": "node scripts/prepare_mobile.mjs",
