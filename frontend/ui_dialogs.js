@@ -12,6 +12,7 @@ export function openEditDialog({ todo, lists, mode }) {
       ? "直接写下这次要完成的具体动作，手机上会优先给你更宽的编辑区域。"
       : "你可以改任务标题、切换所属清单，保存后会继续同步到当前节点。";
   elements.editInput.value = todo.title;
+  syncEditTextareaHeight();
   renderEditCharacterCount();
   renderEditorLists(lists, todo.listId);
   elements.editDialog.showModal();
@@ -40,6 +41,15 @@ export function renderEditCharacterCount() {
   const currentLength = elements.editInput.value.length;
   elements.editCharacterCount.textContent = `${currentLength} / ${maxLength}`;
   elements.editCharacterCount.dataset.state = currentLength >= maxLength ? "limit" : "default";
+}
+
+export function syncEditTextareaHeight() {
+  if (!(elements.editInput instanceof HTMLTextAreaElement)) {
+    return;
+  }
+
+  elements.editInput.style.height = "auto";
+  elements.editInput.style.height = `${Math.max(elements.editInput.scrollHeight, 132)}px`;
 }
 
 function renderEditorLists(lists, activeListId) {

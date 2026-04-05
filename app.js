@@ -88,6 +88,18 @@ import {
   getSelectedTodos,
   resolveBatchMoveListId,
 } from "./frontend/todo_queries.js";
+import {
+  applyTodoPatches as applyTodoPatchesToCollection,
+  captureSnapshot,
+  clearCompletedTodosFromList,
+  createOptimisticList,
+  prependOptimisticTodo,
+  removeListAndTodos,
+  removeTodoById,
+  removeTodosByIds,
+  resolveActiveListId,
+  updateListTitle,
+} from "./frontend/todo_data.js";
 
 let realtimeConnection = null;
 let removeIncomingLinkListener = () => {};
@@ -649,8 +661,7 @@ async function handleBatchDeleteTodos() {
       payload: { todoId },
     })),
     optimisticApply: () => {
-      const selectedTodoIdSet = new Set(selectedTodoIds);
-      setTodos(getState().todos.filter((todo) => !selectedTodoIdSet.has(todo.id)));
+      setTodos(removeTodosByIds(getState().todos, selectedTodoIds));
     },
     offlineMessage: "批量删除已离线保存，恢复连接后会继续同步。",
   });
@@ -826,11 +837,7 @@ async function handleSaveList(rawValue) {
       kind: "updateList",
       payload: { listId: editingListId, title },
       optimisticApply: () => {
-        setLists(
-          getState().lists.map((list) =>
-            list.id === editingListId ? { ...list, title, updatedAt: Date.now() } : list,
-          ),
-        );
+        setLists(updateListTitle(getState().lists, editingListId, title));
       },
     });
   } finally {
@@ -873,10 +880,10 @@ async function handleDeleteActiveList() {
     kind: "deleteList",
     payload: { listId: activeListId },
     optimisticApply: () => {
-      const remainingLists = getState().lists.filter((list) => list.id !== activeListId);
-      setLists(remainingLists);
-      setTodos(getState().todos.filter((todo) => todo.listId !== activeListId));
-      setActiveListId(remainingLists[0]?.id ?? null);
+      const nextState = removeListAndTodos(getState().lists, getState().todos, activeListId);
+      setLists(nextState.lists);
+      setTodos(nextState.todos);
+      setActiveListId(nextState.lists[0]?.id ?? null);
     },
   });
 }
@@ -886,7 +893,7 @@ async function handleDelete(todoId) {
     kind: "deleteTodo",
     payload: { todoId },
     optimisticApply: () => {
-      setTodos(getState().todos.filter((todo) => todo.id !== todoId));
+      setTodos(removeTodoById(getState().todos, todoId));
     },
   });
 }
@@ -901,9 +908,7 @@ async function handleClearCompleted() {
     kind: "clearCompleted",
     payload: { listId },
     optimisticApply: () => {
-      setTodos(
-        getState().todos.filter((todo) => !(todo.listId === listId && todo.completed)),
-      );
+      setTodos(clearCompletedTodosFromList(getState().todos, listId));
     },
   });
 }
@@ -913,8 +918,7 @@ async function createOrQueueTodo(todo) {
     kind: "createTodo",
     payload: todo,
     optimisticApply: () => {
-      const optimisticTodo = createOptimisticTodo(todo);
-      setTodos([optimisticTodo, ...getState().todos.filter((item) => item.id !== todo.id)]);
+      setTodos(prependOptimisticTodo(getState().todos, todo));
     },
   });
 }
@@ -925,21 +929,14 @@ async function updateOrQueueTodo(todoId, patch) {
     payload: { todoId, ...patch },
     optimisticApply: () => {
       setTodos(
-        getState().todos.map((todo) =>
-          todo.id === todoId
-            ? {
-                ...todo,
-                ...patch,
-                updatedAt: Date.now(),
-                completedAt:
-                  patch.completed === true
-                    ? Date.now()
-                    : patch.completed === false
-                      ? null
-                      : todo.completedAt,
-              }
-            : todo,
-        ),
+        applyTodoPatchesToCollection(getState().todos, [
+          {
+            todoId,
+            title: patch.title,
+            listId: patch.listId,
+            completed: patch.completed,
+          },
+        ]),
       );
     },
   });
@@ -1189,54 +1186,12 @@ function persistCurrentSnapshot(
   });
 }
 
-function resolveActiveListId(lists, currentActiveListId, defaultListId) {
-  if (currentActiveListId && lists.some((list) => list.id === currentActiveListId)) {
-    return currentActiveListId;
-  }
-
-  if (defaultListId && lists.some((list) => list.id === defaultListId)) {
-    return defaultListId;
-  }
-
-  return lists[0]?.id ?? null;
-}
-
 function getActiveListId() {
   return getState().activeListId || getState().lists[0]?.id || null;
 }
 
-function createOptimisticTodo({ id, listId, title, completed }) {
-  const now = Date.now();
-  return {
-    id,
-    listId,
-    title,
-    completed,
-    createdAt: now,
-    updatedAt: now,
-    completedAt: completed ? now : null,
-  };
-}
-
-function createOptimisticList({ id, title }) {
-  const now = Date.now();
-  return {
-    id,
-    title,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
 function captureLocalSnapshot() {
-  return {
-    lists: getState().lists.map((list) => ({ ...list })),
-    todos: getState().todos.map((todo) => ({ ...todo })),
-    activeListId: getState().activeListId,
-    selectionMode: getState().selectionMode,
-    selectedTodoIds: [...getState().selectedTodoIds],
-    batchMoveListId: getState().batchMoveListId,
-  };
+  return captureSnapshot(getState());
 }
 
 function restoreLocalSnapshot(snapshot) {
@@ -1368,40 +1323,7 @@ function syncBatchMoveTarget() {
 }
 
 function applyTodoPatches(patches) {
-  const patchByTodoId = new Map(
-    patches.map((patch) => [
-      patch.todoId,
-      {
-        title: patch.title,
-        listId: patch.listId,
-        completed: patch.completed,
-        completedAt: patch.completedAt,
-      },
-    ]),
-  );
-
-  setTodos(
-    getState().todos.map((todo) => {
-      const patch = patchByTodoId.get(todo.id);
-      if (!patch) {
-        return todo;
-      }
-
-      return {
-        ...todo,
-        ...(patch.title === undefined ? {} : { title: patch.title }),
-        ...(patch.listId === undefined ? {} : { listId: patch.listId }),
-        ...(patch.completed === undefined ? {} : { completed: patch.completed }),
-        updatedAt: Date.now(),
-        completedAt:
-          patch.completed === true
-            ? (patch.completedAt ?? Date.now())
-            : patch.completed === false
-              ? null
-              : todo.completedAt,
-      };
-    }),
-  );
+  setTodos(applyTodoPatchesToCollection(getState().todos, patches));
 }
 
 function isTodoRecord(value) {

@@ -1,4 +1,4 @@
-import { renderEditCharacterCount } from "./ui_dialogs.js";
+import { renderEditCharacterCount, syncEditTextareaHeight } from "./ui_dialogs.js";
 import { bindDelegatedPress, bindPress, elements } from "./ui_dom.js";
 
 export function initUI(handlers) {
@@ -15,6 +15,7 @@ export function initUI(handlers) {
   });
 
   elements.editInput.addEventListener("input", () => {
+    syncEditTextareaHeight();
     renderEditCharacterCount();
   });
 
