@@ -97,9 +97,14 @@ import {
   removeListAndTodos,
   removeTodoById,
   removeTodosByIds,
-  resolveActiveListId,
   updateListTitle,
 } from "./frontend/todo_data.js";
+import {
+  applyRemoteSnapshot,
+  flushPendingQueue as flushPendingQueueRuntime,
+  persistSnapshot,
+  runServerMutation as runServerMutationRuntime,
+} from "./frontend/sync_runtime.js";
 
 let realtimeConnection = null;
 let removeIncomingLinkListener = () => {};
@@ -1091,10 +1096,13 @@ async function refreshSnapshot(
 }
 
 async function flushPendingQueue(serverBaseUrl, serverToken) {
-  const remaining = await flushPendingOperations(serverBaseUrl, serverToken, (operation) =>
-    runServerMutation(operation.kind, operation.payload, serverBaseUrl, serverToken),
-  );
-  setPendingOperations(remaining.length);
+  await flushPendingQueueRuntime({
+    serverBaseUrl,
+    serverToken,
+    flushPendingOperations,
+    runMutation: runServerMutation,
+    setPendingOperations,
+  });
 }
 
 async function runServerMutation(
@@ -1103,49 +1111,22 @@ async function runServerMutation(
   serverBaseUrl = getState().serverBaseUrl,
   serverToken = getState().serverToken,
 ) {
-  if (kind === "createTodo") {
-    await createTodo(
-      serverBaseUrl,
-      serverToken,
-      payload.title,
-      payload.listId ?? getActiveListId(),
-      payload.id,
-    );
-    return;
-  }
-
-  if (kind === "updateTodo") {
-    await updateTodo(serverBaseUrl, serverToken, payload.todoId, {
-      title: payload.title,
-      completed: payload.completed,
-      listId: payload.listId,
-    });
-    return;
-  }
-
-  if (kind === "deleteTodo") {
-    await deleteTodo(serverBaseUrl, serverToken, payload.todoId);
-    return;
-  }
-
-  if (kind === "clearCompleted") {
-    await clearCompletedTodos(serverBaseUrl, serverToken, payload.listId);
-    return;
-  }
-
-  if (kind === "createList") {
-    await createList(serverBaseUrl, serverToken, payload.title, payload.id);
-    return;
-  }
-
-  if (kind === "updateList") {
-    await updateList(serverBaseUrl, serverToken, payload.listId, { title: payload.title });
-    return;
-  }
-
-  if (kind === "deleteList") {
-    await deleteList(serverBaseUrl, serverToken, payload.listId);
-  }
+  await runServerMutationRuntime({
+    kind,
+    payload,
+    serverBaseUrl,
+    serverToken,
+    getActiveListId,
+    api: {
+      clearCompletedTodos,
+      createList,
+      createTodo,
+      deleteList,
+      deleteTodo,
+      updateList,
+      updateTodo,
+    },
+  });
 }
 
 function applySnapshot(
@@ -1156,33 +1137,32 @@ function applySnapshot(
     serverToken = getState().serverToken,
   },
 ) {
-  const lists = Array.isArray(snapshot.lists) ? snapshot.lists.filter(isListRecord) : [];
-  const todos = Array.isArray(snapshot.items) ? snapshot.items.filter(isTodoRecord) : [];
-  const currentActiveListId = preserveActiveList ? getState().activeListId : null;
-  const nextActiveListId = resolveActiveListId(
-    lists,
-    currentActiveListId,
-    snapshot.defaultListId,
-  );
-
-  setLists(lists);
-  setTodos(todos);
-  setActiveListId(nextActiveListId);
-  setPendingOperations(loadPendingOperations(serverBaseUrl, serverToken).length);
-  setSyncState("online");
-  syncBatchSelection({ visibleOnly: true });
-  syncBatchMoveTarget();
+  applyRemoteSnapshot({
+    snapshot,
+    preserveActiveList,
+    currentActiveListId: getState().activeListId,
+    serverBaseUrl,
+    serverToken,
+    loadPendingOperations,
+    setLists,
+    setTodos,
+    setActiveListId,
+    setPendingOperations,
+    setSyncState,
+    syncBatchSelection,
+    syncBatchMoveTarget,
+  });
 }
 
 function persistCurrentSnapshot(
   serverBaseUrl = getState().serverBaseUrl,
   serverToken = getState().serverToken,
 ) {
-  saveCachedSnapshot(serverBaseUrl, serverToken, {
-    lists: getState().lists,
-    items: getState().todos,
-    defaultListId: getState().activeListId,
-    time: Date.now(),
+  persistSnapshot({
+    serverBaseUrl,
+    serverToken,
+    state: getState(),
+    saveCachedSnapshot,
   });
 }
 
@@ -1324,31 +1304,6 @@ function syncBatchMoveTarget() {
 
 function applyTodoPatches(patches) {
   setTodos(applyTodoPatchesToCollection(getState().todos, patches));
-}
-
-function isTodoRecord(value) {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.id === "string" &&
-    typeof value.listId === "string" &&
-    typeof value.title === "string" &&
-    typeof value.completed === "boolean" &&
-    typeof value.createdAt === "number" &&
-    typeof value.updatedAt === "number" &&
-    (typeof value.completedAt === "number" || value.completedAt === null || value.completedAt === undefined)
-  );
-}
-
-function isListRecord(value) {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.id === "string" &&
-    typeof value.title === "string" &&
-    typeof value.createdAt === "number" &&
-    typeof value.updatedAt === "number"
-  );
 }
 
 function render() {
