@@ -264,22 +264,27 @@ export async function useDiscoveryCandidate({
   connectToServer,
   failConnection,
 }) {
-  const candidate = getState().discoveryCandidates.find((item) => item.serverBaseUrl === serverBaseUrl);
+  const state = getState();
+  const candidate = state.discoveryCandidates.find((item) => item.serverBaseUrl === serverBaseUrl);
   if (!candidate) {
     failConnection("候选节点不存在。");
     return;
   }
 
+  const candidateToken = resolveCandidateToken(candidate, state);
+  const requiresToken = candidate.authRequired === true || candidate.status === "auth";
   setServerDraftUrl(candidate.serverBaseUrl);
-  if (candidate.serverToken) {
-    setServerDraftToken(candidate.serverToken);
-  }
+  setServerDraftToken(candidateToken);
   setServerConnectionState("imported");
-  setServerConnectionMessage(`已填入候选节点：${candidate.serverBaseUrl}`);
+  setServerConnectionMessage(
+    requiresToken && !candidateToken
+      ? `已填入候选节点：${candidate.serverBaseUrl}，请补充 token 后连接。`
+      : `已填入候选节点：${candidate.serverBaseUrl}`,
+  );
   render();
 
-  if (candidate.serverToken && (candidate.status === "ready" || candidate.status === "reachable")) {
-    await connectToServer(candidate.serverBaseUrl, candidate.serverToken, {
+  if ((!requiresToken || candidateToken) && (candidate.status === "ready" || candidate.status === "reachable")) {
+    await connectToServer(candidate.serverBaseUrl, candidateToken, {
       persist: true,
       openTasksView: true,
     });
@@ -326,4 +331,21 @@ export async function applyImportedConnectionConfig({
 
 function defaultIsCancelledQrError(error) {
   return error instanceof QrScanCancelledError || /已取消二维码扫描/.test(error?.message ?? "");
+}
+
+function resolveCandidateToken(candidate, state) {
+  const explicitCandidateToken = typeof candidate.serverToken === "string" ? candidate.serverToken.trim() : "";
+  if (explicitCandidateToken) {
+    return explicitCandidateToken;
+  }
+
+  if (candidate.serverBaseUrl === state.serverDraftUrl) {
+    return typeof state.serverDraftToken === "string" ? state.serverDraftToken.trim() : "";
+  }
+
+  if (candidate.serverBaseUrl === state.serverBaseUrl) {
+    return typeof state.serverToken === "string" ? state.serverToken.trim() : "";
+  }
+
+  return "";
 }

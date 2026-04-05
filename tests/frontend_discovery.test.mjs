@@ -42,6 +42,20 @@ test("describeNetworkSnapshot reports tailscale addresses", () => {
   );
 });
 
+test("buildDiscoveryCandidates wraps ipv6 tailscale addresses", () => {
+  const result = buildDiscoveryCandidates({
+    networkSnapshot: {
+      supported: true,
+      tailscale: [{ address: "fd7a:115c:a1e0::1" }],
+    },
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.serverBaseUrl),
+    ["http://[fd7a:115c:a1e0::1]:8000"],
+  );
+});
+
 test("probeDiscoveryCandidate marks auth-required nodes as reachable", async () => {
   const result = await probeDiscoveryCandidate(
     {

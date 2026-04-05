@@ -42,3 +42,18 @@ test("clears config query params from the current url", () => {
 
   assert.equal(replacedHref, "/?server=http%3A%2F%2F100.88.77.66%3A8000#sync");
 });
+
+test("clears legacy token query param when stripping the current url", () => {
+  let replacedHref = "";
+  globalThis.history = {
+    replaceState(_state, _title, href) {
+      replacedHref = href;
+    },
+  };
+
+  clearIncomingConnectionLink(
+    "https://focus-list.local/?server=http%3A%2F%2F100.88.77.66%3A8000&token=secret#sync",
+  );
+
+  assert.equal(replacedHref, "/?server=http%3A%2F%2F100.88.77.66%3A8000#sync");
+});

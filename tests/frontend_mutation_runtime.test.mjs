@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { ApiError } from "../frontend/api.js";
+
 import {
   executeBatchOperations,
   executeOrQueue,
@@ -116,6 +118,83 @@ test("executeOrQueue restores previous snapshot on auth errors", async () => {
   ]);
 });
 
+test("executeOrQueue restores previous snapshot on non-retryable api errors", async () => {
+  const calls = [];
+  const validationError = new ApiError("todo not found", 404);
+
+  await executeOrQueue({
+    kind: "updateTodo",
+    payload: { todoId: "todo-1" },
+    optimisticApply: () => calls.push(["optimisticApply"]),
+    getState: () => ({ serverBaseUrl: "http://node:8000", serverToken: "secret" }),
+    captureLocalSnapshot: () => "snapshot",
+    syncBatchSelection: () => calls.push(["syncBatchSelection"]),
+    syncBatchMoveTarget: () => calls.push(["syncBatchMoveTarget"]),
+    persistCurrentSnapshot: () => calls.push(["persistCurrentSnapshot"]),
+    render: () => calls.push(["render"]),
+    runServerMutation: async () => {
+      throw validationError;
+    },
+    refreshSnapshot: async () => calls.push(["refreshSnapshot"]),
+    isAuthError: () => false,
+    restoreLocalSnapshot: (snapshot) => calls.push(["restoreLocalSnapshot", snapshot]),
+    handleSyncError: (...args) => calls.push(["handleSyncError", ...args]),
+    handlePermanentError: (...args) => calls.push(["handlePermanentError", ...args]),
+    enqueueOperation: (...args) => calls.push(["enqueueOperation", ...args]),
+    loadPendingOperations: () => [{}, {}],
+    setPendingOperations: (value) => calls.push(["setPendingOperations", value]),
+  });
+
+  assert.deepEqual(calls, [
+    ["optimisticApply"],
+    ["syncBatchSelection"],
+    ["syncBatchMoveTarget"],
+    ["persistCurrentSnapshot"],
+    ["render"],
+    ["restoreLocalSnapshot", "snapshot"],
+    ["persistCurrentSnapshot"],
+    ["handlePermanentError", validationError, "todo not found"],
+  ]);
+});
+
+test("executeOrQueue does not requeue a mutation when only refresh fails after commit", async () => {
+  const calls = [];
+  const refreshError = new Error("refresh failed");
+
+  await executeOrQueue({
+    kind: "updateTodo",
+    payload: { todoId: "todo-1" },
+    optimisticApply: () => calls.push(["optimisticApply"]),
+    getState: () => ({ serverBaseUrl: "http://node:8000", serverToken: "secret" }),
+    captureLocalSnapshot: () => "snapshot",
+    syncBatchSelection: () => calls.push(["syncBatchSelection"]),
+    syncBatchMoveTarget: () => calls.push(["syncBatchMoveTarget"]),
+    persistCurrentSnapshot: () => calls.push(["persistCurrentSnapshot"]),
+    render: () => calls.push(["render"]),
+    runServerMutation: async () => calls.push(["runServerMutation"]),
+    refreshSnapshot: async () => {
+      throw refreshError;
+    },
+    isAuthError: () => false,
+    restoreLocalSnapshot: (snapshot) => calls.push(["restoreLocalSnapshot", snapshot]),
+    handleSyncError: (...args) => calls.push(["handleSyncError", ...args]),
+    handlePermanentError: (...args) => calls.push(["handlePermanentError", ...args]),
+    enqueueOperation: (...args) => calls.push(["enqueueOperation", ...args]),
+    loadPendingOperations: () => [{}, {}],
+    setPendingOperations: (value) => calls.push(["setPendingOperations", value]),
+  });
+
+  assert.deepEqual(calls, [
+    ["optimisticApply"],
+    ["syncBatchSelection"],
+    ["syncBatchMoveTarget"],
+    ["persistCurrentSnapshot"],
+    ["render"],
+    ["runServerMutation"],
+    ["handleSyncError", refreshError, "修改已提交到服务端，但刷新最新状态失败，请稍后重试。"],
+  ]);
+});
+
 test("executeBatchOperations queues remaining operations on offline failures", async () => {
   const calls = [];
   const offlineError = new Error("offline");
@@ -165,5 +244,48 @@ test("executeBatchOperations queues remaining operations on offline failures", a
     ["enqueueOperation", "http://node:8000", "secret", { kind: "moveTodo", payload: { todoId: "todo-3" } }],
     ["setPendingOperations", 2],
     ["handleSyncError", offlineError, "批量修改已离线保存。"],
+  ]);
+});
+
+test("executeBatchOperations does not requeue operations when refresh fails after all commits", async () => {
+  const calls = [];
+  const refreshError = new Error("refresh failed");
+
+  await executeBatchOperations({
+    operations: [
+      { kind: "updateTodo", payload: { todoId: "todo-1" } },
+      { kind: "deleteTodo", payload: { todoId: "todo-2" } },
+    ],
+    optimisticApply: () => calls.push(["optimisticApply"]),
+    getState: () => ({ serverBaseUrl: "http://node:8000", serverToken: "secret" }),
+    clearSelectedTodoIds: () => calls.push(["clearSelectedTodoIds"]),
+    captureLocalSnapshot: () => "snapshot",
+    syncBatchSelection: (options) => calls.push(["syncBatchSelection", options]),
+    syncBatchMoveTarget: () => calls.push(["syncBatchMoveTarget"]),
+    persistCurrentSnapshot: () => calls.push(["persistCurrentSnapshot"]),
+    render: () => calls.push(["render"]),
+    runServerMutation: async (...args) => calls.push(["runServerMutation", ...args]),
+    refreshSnapshot: async () => {
+      throw refreshError;
+    },
+    isAuthError: () => false,
+    restoreLocalSnapshot: (snapshot) => calls.push(["restoreLocalSnapshot", snapshot]),
+    handleSyncError: (...args) => calls.push(["handleSyncError", ...args]),
+    handlePermanentError: (...args) => calls.push(["handlePermanentError", ...args]),
+    enqueueOperation: (...args) => calls.push(["enqueueOperation", ...args]),
+    loadPendingOperations: () => [{}, {}],
+    setPendingOperations: (value) => calls.push(["setPendingOperations", value]),
+  });
+
+  assert.deepEqual(calls, [
+    ["optimisticApply"],
+    ["clearSelectedTodoIds"],
+    ["syncBatchSelection", { visibleOnly: true }],
+    ["syncBatchMoveTarget"],
+    ["persistCurrentSnapshot"],
+    ["render"],
+    ["runServerMutation", "updateTodo", { todoId: "todo-1" }],
+    ["runServerMutation", "deleteTodo", { todoId: "todo-2" }],
+    ["handleSyncError", refreshError, "修改已提交到服务端，但刷新最新状态失败，请稍后重试。"],
   ]);
 });

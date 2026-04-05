@@ -3,6 +3,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
+import { buildJavaEnv, formatJavaResolutionError, formatJavaRuntime, resolveJavaRuntime } from "./lib/java_runtime.mjs";
+
 const projectRoot = process.cwd();
 const androidDir = path.join(projectRoot, "android");
 
@@ -29,18 +31,14 @@ if (!tasks[mode]) {
   process.exit(1);
 }
 
-const javaHomes = [
-  process.env.JAVA_HOME,
-  "/Users/lyston/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
-  "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
-].filter(Boolean);
+const javaRuntime = resolveJavaRuntime(process.env);
 
-const javaHome = javaHomes.find((candidate) => existsSync(candidate));
-
-if (!javaHome) {
-  console.error("Java 21 not found. Set JAVA_HOME to a Java 21 installation before building Android.");
+if (!javaRuntime) {
+  console.error(formatJavaResolutionError());
   process.exit(1);
 }
+
+console.log(`Using ${formatJavaRuntime(javaRuntime)}`);
 
 function run(command, args, cwd, extraEnv = {}) {
   const result = spawnSync(command, args, {
@@ -48,8 +46,7 @@ function run(command, args, cwd, extraEnv = {}) {
     stdio: "inherit",
     env: {
       ...process.env,
-      JAVA_HOME: javaHome,
-      PATH: `${path.join(javaHome, "bin")}:${process.env.PATH || ""}`,
+      ...buildJavaEnv(javaRuntime, process.env),
       ...extraEnv,
     },
   });
@@ -66,5 +63,5 @@ const outputPath = existsSync(tasks[mode].outputPath)
   : tasks[mode].fallbackOutputPath;
 
 if (outputPath) {
-    console.log(`Android artifact: ${outputPath}`);
+  console.log(`Android artifact: ${outputPath}`);
 }

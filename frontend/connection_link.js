@@ -1,4 +1,5 @@
 const CONFIG_QUERY_KEYS = ["config", "config64"];
+const SENSITIVE_QUERY_KEYS = ["config", "config64", "token"];
 
 export function readIncomingConnectionLink(href = globalThis.location?.href ?? "") {
   if (!href) {
@@ -36,6 +37,14 @@ export function readIncomingConnectionLink(href = globalThis.location?.href ?? "
 }
 
 export function clearIncomingConnectionLink(currentHref = globalThis.location?.href ?? "") {
+  clearConnectionQueryParams(currentHref, SENSITIVE_QUERY_KEYS);
+}
+
+export function clearSensitiveConnectionParams(currentHref = globalThis.location?.href ?? "") {
+  clearConnectionQueryParams(currentHref, SENSITIVE_QUERY_KEYS);
+}
+
+function clearConnectionQueryParams(currentHref, keys) {
   if (!currentHref || typeof globalThis.history?.replaceState !== "function") {
     return;
   }
@@ -48,7 +57,7 @@ export function clearIncomingConnectionLink(currentHref = globalThis.location?.h
   }
 
   let changed = false;
-  CONFIG_QUERY_KEYS.forEach((key) => {
+  keys.forEach((key) => {
     if (url.searchParams.has(key)) {
       url.searchParams.delete(key);
       changed = true;

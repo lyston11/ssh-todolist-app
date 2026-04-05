@@ -27,6 +27,8 @@ const {
   setBatchMoveListId,
   setSelectedTodoIds,
   setSelectionMode,
+  setServerToken,
+  resetServerToken,
   toggleSelectedTodoId,
 } = await import("../frontend/state.js");
 
@@ -56,4 +58,14 @@ test("batch move list id is normalized and selection mode is writable", () => {
 
   setSelectionMode(false);
   clearSelectedTodoIds();
+});
+
+test("server token is not persisted into localStorage", () => {
+  storage.clear();
+
+  setServerToken("secret-token");
+
+  assert.equal(storage.has("focus-list.server-token"), false);
+
+  resetServerToken();
 });

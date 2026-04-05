@@ -11,6 +11,9 @@ import {
   updateTodo,
 } from "./frontend/api.js";
 import {
+  clearIncomingConnectionLink,
+} from "./frontend/connection_link.js";
+import {
   applyImportedConnectionConfig as applyImportedConnectionConfigRuntime,
   consumeIncomingConnectionUrl as consumeIncomingConnectionUrlRuntime,
   fetchAndImportConnectionConfig,
@@ -242,9 +245,11 @@ async function bootstrap() {
   setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
   syncOnboardingVisibility();
   await refreshNetworkSnapshot({ silent: true });
-  if (await consumeIncomingConnectionUrl(globalThis.location?.href ?? "", { clearBrowserUrl: true })) {
+  const currentBrowserUrl = globalThis.location?.href ?? "";
+  if (await consumeIncomingConnectionUrl(currentBrowserUrl, { clearBrowserUrl: true })) {
     return;
   }
+  clearIncomingConnectionLink(currentBrowserUrl);
 
   const nativeLaunchUrl = await getNativeLaunchUrl();
   if (await consumeIncomingConnectionUrl(nativeLaunchUrl)) {
@@ -317,11 +322,18 @@ async function handleConnectRecentConnection(serverBaseUrl) {
     return;
   }
 
+  const existingSessionToken = resolveCurrentServerToken(serverBaseUrl);
   setServerDraftUrl(recentConnection.serverBaseUrl);
-  setServerDraftToken(recentConnection.serverToken);
+  setServerDraftToken(existingSessionToken);
+  if (recentConnection.authRequired && !existingSessionToken) {
+    setServerConnectionState("imported");
+    setServerConnectionMessage(`已填入最近节点：${recentConnection.serverBaseUrl}，该节点需要 token，请重新输入后再连接。`);
+    render();
+    return;
+  }
   render();
 
-  await connectToServer(recentConnection.serverBaseUrl, recentConnection.serverToken, {
+  await connectToServer(recentConnection.serverBaseUrl, existingSessionToken, {
     persist: true,
     openTasksView: true,
   });
@@ -685,6 +697,7 @@ async function executeOrQueue({ kind, payload, optimisticApply }) {
     isAuthError,
     restoreLocalSnapshot,
     handleSyncError,
+    handlePermanentError: (_error, message) => failConnection(message),
     enqueueOperation,
     loadPendingOperations,
     setPendingOperations,
@@ -707,6 +720,7 @@ async function executeBatchTodoOperations({ operations, optimisticApply, offline
     isAuthError,
     restoreLocalSnapshot,
     handleSyncError,
+    handlePermanentError: (_error, message) => failConnection(message),
     enqueueOperation,
     loadPendingOperations,
     setPendingOperations,
@@ -923,6 +937,18 @@ function failConnection(message) {
   setServerConnectionState("error");
   setServerConnectionMessage(message);
   render();
+}
+
+function resolveCurrentServerToken(serverBaseUrl) {
+  if (serverBaseUrl === getState().serverDraftUrl) {
+    return getState().serverDraftToken.trim();
+  }
+
+  if (serverBaseUrl === getState().serverBaseUrl) {
+    return getState().serverToken.trim();
+  }
+
+  return "";
 }
 
 function resetBatchSelection({ disableMode = false } = {}) {

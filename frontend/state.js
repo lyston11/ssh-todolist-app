@@ -4,9 +4,11 @@ import { loadRecentConnections } from "./recent_connections.js";
 const SERVER_URL_STORAGE_KEY = "focus-list.server-url";
 const SERVER_TOKEN_STORAGE_KEY = "focus-list.server-token";
 const ACTIVE_LIST_ID_STORAGE_KEY = "focus-list.active-list-id";
+const inMemorySessionStorage = new Map();
 
 const defaultServerBaseUrl = getDefaultServerBaseUrl();
-const defaultServerToken = getDefaultServerToken();
+const defaultServerToken = "";
+const initialServerToken = loadInitialServerToken();
 
 const state = {
   lists: [],
@@ -24,8 +26,8 @@ const state = {
   syncState: "connecting",
   serverBaseUrl: loadServerBaseUrl(),
   serverDraftUrl: loadServerBaseUrl(),
-  serverToken: loadServerToken(),
-  serverDraftToken: loadServerToken(),
+  serverToken: initialServerToken,
+  serverDraftToken: initialServerToken,
   connectionConfigDraft: "",
   onboardingDismissed: loadOnboardingDismissed(),
   onboardingVisible: false,
@@ -139,7 +141,7 @@ export function setServerBaseUrl(serverBaseUrl) {
 
 export function setServerToken(serverToken) {
   state.serverToken = serverToken;
-  localStorage.setItem(SERVER_TOKEN_STORAGE_KEY, serverToken);
+  writeSessionValue(SERVER_TOKEN_STORAGE_KEY, serverToken);
 }
 
 export function setServerDraftUrl(serverDraftUrl) {
@@ -176,7 +178,7 @@ export function resetServerBaseUrl() {
 export function resetServerToken() {
   state.serverToken = defaultServerToken;
   state.serverDraftToken = defaultServerToken;
-  localStorage.removeItem(SERVER_TOKEN_STORAGE_KEY);
+  removeSessionValue(SERVER_TOKEN_STORAGE_KEY);
 }
 
 export function setServerConnectionState(serverConnectionState) {
@@ -228,11 +230,19 @@ function loadServerBaseUrl() {
 }
 
 function loadServerToken() {
-  const stored = localStorage.getItem(SERVER_TOKEN_STORAGE_KEY);
+  const stored = readSessionValue(SERVER_TOKEN_STORAGE_KEY);
   if (stored !== null) {
     return sanitizeServerToken(stored);
   }
-  return defaultServerToken;
+  return "";
+}
+
+function loadInitialServerToken() {
+  const storedToken = loadServerToken();
+  if (storedToken) {
+    return storedToken;
+  }
+  return getDefaultServerToken();
 }
 
 function loadActiveListId() {
@@ -255,6 +265,59 @@ function getDefaultServerToken() {
   }
 
   return "";
+}
+
+function readSessionValue(key) {
+  const sessionStorage = getSessionStorage();
+  if (sessionStorage !== null) {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  return inMemorySessionStorage.has(key) ? inMemorySessionStorage.get(key) : null;
+}
+
+function writeSessionValue(key, value) {
+  const normalizedValue = String(value ?? "");
+  if (!normalizedValue) {
+    removeSessionValue(key);
+    return;
+  }
+
+  const sessionStorage = getSessionStorage();
+  if (sessionStorage !== null) {
+    try {
+      sessionStorage.setItem(key, normalizedValue);
+      return;
+    } catch {
+      // Fall back to in-memory session storage when the runtime blocks access.
+    }
+  }
+
+  inMemorySessionStorage.set(key, normalizedValue);
+}
+
+function removeSessionValue(key) {
+  const sessionStorage = getSessionStorage();
+  if (sessionStorage !== null) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // Keep the in-memory fallback in sync if browser storage is unavailable.
+    }
+  }
+
+  inMemorySessionStorage.delete(key);
+}
+
+function getSessionStorage() {
+  if (typeof globalThis.sessionStorage?.getItem !== "function") {
+    return null;
+  }
+  return globalThis.sessionStorage;
 }
 
 function getInitialConnectionMessage(serverBaseUrl) {

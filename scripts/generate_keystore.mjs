@@ -3,6 +3,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
+import { buildJavaEnv, formatJavaResolutionError, formatJavaRuntime, resolveJavaRuntime } from "./lib/java_runtime.mjs";
+
 const env = process.env;
 const keystorePath = env.SSH_TODOLIST_ANDROID_STORE_FILE || env.SSH_TODOLIST_KEYSTORE_PATH;
 const storePassword = env.SSH_TODOLIST_ANDROID_STORE_PASSWORD || env.SSH_TODOLIST_STORE_PASSWORD;
@@ -26,14 +28,15 @@ if (existsSync(keystorePath)) {
   process.exit(1);
 }
 
-const javaHomeCandidates = [
-  env.JAVA_HOME,
-  "/Users/lyston/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
-  "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
-].filter(Boolean);
+const javaRuntime = resolveJavaRuntime(env);
+if (!javaRuntime) {
+  console.error(formatJavaResolutionError());
+  process.exit(1);
+}
 
-const javaHome = javaHomeCandidates.find((candidate) => existsSync(candidate));
-const keytool = javaHome ? path.join(javaHome, "bin", "keytool") : "keytool";
+console.log(`Using ${formatJavaRuntime(javaRuntime)}`);
+
+const keytool = javaRuntime.javaHome ? path.join(javaRuntime.javaHome, "bin", "keytool") : "keytool";
 
 mkdirSync(path.dirname(keystorePath), { recursive: true });
 
@@ -65,8 +68,7 @@ const result = spawnSync(
     stdio: "inherit",
     env: {
       ...env,
-      JAVA_HOME: javaHome || env.JAVA_HOME,
-      PATH: javaHome ? `${path.join(javaHome, "bin")}:${env.PATH || ""}` : env.PATH,
+      ...buildJavaEnv(javaRuntime, env),
     },
   },
 );

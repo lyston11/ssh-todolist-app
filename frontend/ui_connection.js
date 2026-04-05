@@ -308,7 +308,7 @@ function renderNetworkDiscovery(state) {
 }
 
 function buildRecentConnectionMeta(connection) {
-  const tokenState = connection.serverToken ? "已保存 token" : connection.authRequired ? "需要 token" : "无需 token";
+  const tokenState = connection.authRequired ? "需要重新输入 token" : "无需 token";
   const lastUsedAt = new Date(connection.lastUsedAt).toLocaleString("zh-CN", {
     month: "numeric",
     day: "numeric",

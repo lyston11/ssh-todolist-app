@@ -60,7 +60,7 @@ export function buildDiscoveryCandidates({
 
   tailscaleIps.forEach((ipAddress) => {
     addCandidate({
-      serverBaseUrl: `http://${ipAddress}:${preferredPort}`,
+      serverBaseUrl: buildHttpCandidateUrl(ipAddress, preferredPort),
       source: "tailscale-local",
       label: `本机 Tailscale 地址 ${ipAddress}`,
     });
@@ -162,6 +162,27 @@ function normalizeUrl(rawUrl) {
   } catch {
     return "";
   }
+}
+
+function buildHttpCandidateUrl(host, port) {
+  return `http://${formatHostForUrl(host)}:${port}`;
+}
+
+function formatHostForUrl(host) {
+  if (typeof host !== "string") {
+    return "";
+  }
+
+  const normalizedHost = host.trim();
+  if (!normalizedHost) {
+    return "";
+  }
+
+  if (normalizedHost.includes(":") && !normalizedHost.startsWith("[") && !normalizedHost.endsWith("]")) {
+    return `[${normalizedHost}]`;
+  }
+
+  return normalizedHost;
 }
 
 function isAuthError(error) {

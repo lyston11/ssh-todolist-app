@@ -28,7 +28,6 @@ export function removeRecentConnection(serverBaseUrl) {
 function normalizeRecentConnection(connection) {
   return {
     serverBaseUrl: String(connection.serverBaseUrl ?? "").trim(),
-    serverToken: String(connection.serverToken ?? "").trim(),
     authRequired: connection.authRequired === true,
     lastUsedAt: normalizeTimestamp(connection.lastUsedAt),
   };
@@ -47,7 +46,6 @@ function isRecentConnectionRecord(value) {
     typeof value === "object" &&
     typeof value.serverBaseUrl === "string" &&
     value.serverBaseUrl.trim() &&
-    typeof value.serverToken === "string" &&
     typeof value.authRequired === "boolean" &&
     typeof value.lastUsedAt === "number"
   );

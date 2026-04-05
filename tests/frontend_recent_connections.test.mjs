@@ -26,19 +26,18 @@ test("recent connections are deduplicated by server url", () => {
 
   saveRecentConnection({
     serverBaseUrl: "http://100.88.77.66:8000",
-    serverToken: "first",
     authRequired: true,
     lastUsedAt: 1,
   });
   const result = saveRecentConnection({
     serverBaseUrl: "http://100.88.77.66:8000",
-    serverToken: "second",
-    authRequired: true,
+    authRequired: false,
     lastUsedAt: 2,
   });
 
   assert.equal(result.length, 1);
-  assert.equal(result[0].serverToken, "second");
+  assert.equal(result[0].authRequired, false);
+  assert.equal(storage.get("focus-list.recent-connections").includes("second"), false);
 });
 
 test("recent connections can be removed", () => {
@@ -46,7 +45,6 @@ test("recent connections can be removed", () => {
 
   saveRecentConnection({
     serverBaseUrl: "http://100.88.77.66:8000",
-    serverToken: "secret",
     authRequired: true,
     lastUsedAt: 1,
   });

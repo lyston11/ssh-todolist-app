@@ -26,7 +26,13 @@ export function connectRealtime({
       if (stopped || socket !== nextSocket) {
         return;
       }
-      onOnline();
+      Promise.resolve(onOnline()).catch((error) => {
+        console.error(error);
+        if (stopped || socket !== nextSocket) {
+          return;
+        }
+        nextSocket.close();
+      });
     });
 
     nextSocket.addEventListener("message", (event) => {
