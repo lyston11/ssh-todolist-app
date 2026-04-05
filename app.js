@@ -89,6 +89,15 @@ import {
   resolveBatchMoveListId,
 } from "./frontend/todo_queries.js";
 import {
+  clearBatchSelection,
+  resetBatchSelection as resetBatchSelectionRuntime,
+  selectVisibleTodos as selectVisibleTodosRuntime,
+  syncBatchMoveTarget as syncBatchMoveTargetRuntime,
+  syncBatchSelection as syncBatchSelectionRuntime,
+  toggleSelectionMode as toggleSelectionModeRuntime,
+  toggleTodoSelection as toggleTodoSelectionRuntime,
+} from "./frontend/selection_runtime.js";
+import {
   applyTodoPatches as applyTodoPatchesToCollection,
   captureSnapshot,
   clearCompletedTodosFromList,
@@ -566,35 +575,42 @@ function handleSelectList(listId) {
 }
 
 function handleToggleSelectionMode() {
-  if (getState().selectionMode) {
-    resetBatchSelection({ disableMode: true });
-  } else {
-    setSelectionMode(true);
-    syncBatchMoveTarget();
-  }
+  toggleSelectionModeRuntime({
+    state: getState(),
+    setSelectionMode,
+    resetBatchSelection,
+    syncBatchMoveTarget,
+  });
   render();
 }
 
 function handleSelectVisibleTodos() {
-  const visibleTodoIds = getCurrentViewTodos(getState()).map((todo) => todo.id);
-  setSelectionMode(true);
-  setSelectedTodoIds(visibleTodoIds);
-  syncBatchMoveTarget();
+  selectVisibleTodosRuntime({
+    state: getState(),
+    getCurrentViewTodos,
+    setSelectionMode,
+    setSelectedTodoIds,
+    syncBatchMoveTarget,
+  });
   render();
 }
 
 function handleClearSelectedTodos() {
-  clearSelectedTodoIds();
-  syncBatchMoveTarget();
+  clearBatchSelection({
+    clearSelectedTodoIds,
+    syncBatchMoveTarget,
+  });
   render();
 }
 
 function handleToggleTodoSelection(todoId, selected) {
-  if (selected) {
-    setSelectionMode(true);
-  }
-  toggleSelectedTodoId(todoId, selected);
-  syncBatchMoveTarget();
+  toggleTodoSelectionRuntime({
+    todoId,
+    selected,
+    setSelectionMode,
+    toggleSelectedTodoId,
+    syncBatchMoveTarget,
+  });
   render();
 }
 
@@ -1279,27 +1295,30 @@ function validateServerBaseUrl(rawValue) {
 }
 
 function resetBatchSelection({ disableMode = false } = {}) {
-  clearSelectedTodoIds();
-  if (disableMode) {
-    setSelectionMode(false);
-  }
-  syncBatchMoveTarget();
+  resetBatchSelectionRuntime({
+    disableMode,
+    clearSelectedTodoIds,
+    setSelectionMode,
+    syncBatchMoveTarget,
+  });
 }
 
 function syncBatchSelection({ visibleOnly = false } = {}) {
-  if (!getState().selectionMode && getState().selectedTodoIds.length > 0) {
-    clearSelectedTodoIds();
-    return;
-  }
-
-  const allowedTodoIds = new Set(
-    (visibleOnly ? getCurrentViewTodos(getState()) : getState().todos).map((todo) => todo.id),
-  );
-  setSelectedTodoIds(getState().selectedTodoIds.filter((todoId) => allowedTodoIds.has(todoId)));
+  syncBatchSelectionRuntime({
+    state: getState(),
+    visibleOnly,
+    getCurrentViewTodos,
+    clearSelectedTodoIds,
+    setSelectedTodoIds,
+  });
 }
 
 function syncBatchMoveTarget() {
-  setBatchMoveListId(resolveBatchMoveListId(getState()));
+  syncBatchMoveTargetRuntime({
+    state: getState(),
+    resolveBatchMoveListId,
+    setBatchMoveListId,
+  });
 }
 
 function applyTodoPatches(patches) {
