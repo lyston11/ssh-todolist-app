@@ -23,6 +23,11 @@ import {
   validateServerBaseUrl,
 } from "./frontend/connection_runtime.js";
 import { attachLifecycleHandlers } from "./frontend/lifecycle.js";
+import {
+  executeBatchOperations as executeBatchOperationsRuntime,
+  executeOrQueue as executeOrQueueRuntime,
+  restoreLocalSnapshot as restoreLocalSnapshotRuntime,
+} from "./frontend/mutation_runtime.js";
 import { addIncomingLinkListener, getNativeLaunchUrl, getNativeNetworkSnapshot, isNativeApp } from "./frontend/native_bridge.js";
 import {
   enqueueOperation,
@@ -866,65 +871,48 @@ async function updateOrQueueTodo(todoId, patch) {
 }
 
 async function executeOrQueue({ kind, payload, optimisticApply }) {
-  const previousSnapshot = captureLocalSnapshot();
-  optimisticApply();
-  syncBatchSelection({ visibleOnly: true });
-  syncBatchMoveTarget();
-  persistCurrentSnapshot();
-  render();
-
-  try {
-    await runServerMutation(kind, payload);
-    await refreshSnapshot();
-  } catch (error) {
-    if (isAuthError(error)) {
-      restoreLocalSnapshot(previousSnapshot);
-      persistCurrentSnapshot();
-      handleSyncError(error, "Token 无效或缺失，请重新填写后再连接。");
-      return;
-    }
-
-    enqueueOperation(getState().serverBaseUrl, getState().serverToken, { kind, payload });
-    setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
-    handleSyncError(error, "已离线保存，本地修改会在恢复连接后自动同步。");
-  }
+  await executeOrQueueRuntime({
+    kind,
+    payload,
+    optimisticApply,
+    getState,
+    captureLocalSnapshot,
+    syncBatchSelection,
+    syncBatchMoveTarget,
+    persistCurrentSnapshot,
+    render,
+    runServerMutation,
+    refreshSnapshot,
+    isAuthError,
+    restoreLocalSnapshot,
+    handleSyncError,
+    enqueueOperation,
+    loadPendingOperations,
+    setPendingOperations,
+  });
 }
 
 async function executeBatchTodoOperations({ operations, optimisticApply, offlineMessage }) {
-  if (operations.length === 0) {
-    return;
-  }
-
-  const previousSnapshot = captureLocalSnapshot();
-  optimisticApply();
-  clearSelectedTodoIds();
-  syncBatchSelection({ visibleOnly: true });
-  syncBatchMoveTarget();
-  persistCurrentSnapshot();
-  render();
-
-  let completedCount = 0;
-
-  try {
-    for (const operation of operations) {
-      await runServerMutation(operation.kind, operation.payload);
-      completedCount += 1;
-    }
-    await refreshSnapshot();
-  } catch (error) {
-    if (isAuthError(error)) {
-      restoreLocalSnapshot(previousSnapshot);
-      persistCurrentSnapshot();
-      handleSyncError(error, "Token 无效或缺失，请重新填写后再连接。");
-      return;
-    }
-
-    operations.slice(completedCount).forEach((operation) => {
-      enqueueOperation(getState().serverBaseUrl, getState().serverToken, operation);
-    });
-    setPendingOperations(loadPendingOperations(getState().serverBaseUrl, getState().serverToken).length);
-    handleSyncError(error, offlineMessage);
-  }
+  await executeBatchOperationsRuntime({
+    operations,
+    optimisticApply,
+    getState,
+    clearSelectedTodoIds,
+    captureLocalSnapshot,
+    syncBatchSelection,
+    syncBatchMoveTarget,
+    persistCurrentSnapshot,
+    render,
+    runServerMutation,
+    refreshSnapshot,
+    isAuthError,
+    restoreLocalSnapshot,
+    handleSyncError,
+    enqueueOperation,
+    loadPendingOperations,
+    setPendingOperations,
+    offlineMessage,
+  });
 }
 
 async function connectToServer(
@@ -1062,14 +1050,17 @@ function captureLocalSnapshot() {
 }
 
 function restoreLocalSnapshot(snapshot) {
-  setLists(snapshot.lists);
-  setTodos(snapshot.todos);
-  setActiveListId(snapshot.activeListId);
-  setSelectionMode(snapshot.selectionMode ?? false);
-  setSelectedTodoIds(snapshot.selectedTodoIds ?? []);
-  setBatchMoveListId(snapshot.batchMoveListId ?? "");
-  syncBatchSelection({ visibleOnly: true });
-  syncBatchMoveTarget();
+  restoreLocalSnapshotRuntime({
+    snapshot,
+    setLists,
+    setTodos,
+    setActiveListId,
+    setSelectionMode,
+    setSelectedTodoIds,
+    setBatchMoveListId,
+    syncBatchSelection,
+    syncBatchMoveTarget,
+  });
 }
 
 function isAuthError(error) {
