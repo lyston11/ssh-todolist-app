@@ -1,4 +1,3 @@
-import { shouldDefaultToSettingsView, shouldShowOnboarding } from "./frontend/onboarding.js";
 import {
   ApiError,
   clearCompletedTodos,
@@ -12,20 +11,21 @@ import {
   updateList,
   updateTodo,
 } from "./frontend/api.js";
-import { parseConnectionConfig, resolveSocketConfig } from "./frontend/connection_config.js";
-import { clearIncomingConnectionLink, readIncomingConnectionLink } from "./frontend/connection_link.js";
+import { resolveSocketConfig } from "./frontend/connection_config.js";
 import {
-  addIncomingLinkListener,
-  getNativeLaunchUrl,
-  getNativeNetworkSnapshot,
-  isNativeApp,
-} from "./frontend/native_bridge.js";
-import {
-  buildDiscoveryCandidates,
-  describeNetworkSnapshot,
-  probeDiscoveryCandidates,
-} from "./frontend/discovery.js";
+  applyImportedConnectionConfig as applyImportedConnectionConfigRuntime,
+  consumeIncomingConnectionUrl as consumeIncomingConnectionUrlRuntime,
+  fetchAndImportConnectionConfig,
+  importConnectionConfigText,
+  pasteAndImportConnectionConfig,
+  probeDiscoveryCandidates as probeDiscoveryCandidatesRuntime,
+  refreshNetworkSnapshot as refreshNetworkSnapshotRuntime,
+  scanAndImportConnectionConfig,
+  useDiscoveryCandidate as useDiscoveryCandidateRuntime,
+  validateServerBaseUrl,
+} from "./frontend/connection_runtime.js";
 import { attachLifecycleHandlers } from "./frontend/lifecycle.js";
+import { addIncomingLinkListener, getNativeLaunchUrl, getNativeNetworkSnapshot, isNativeApp } from "./frontend/native_bridge.js";
 import {
   enqueueOperation,
   flushPendingOperations,
@@ -33,7 +33,10 @@ import {
   loadPendingOperations,
   saveCachedSnapshot,
 } from "./frontend/offline.js";
-import { QrScanCancelledError, scanConnectionQrCode } from "./frontend/qr_scanner.js";
+import {
+  dismissOnboarding as dismissOnboardingRuntime,
+  syncOnboardingVisibility as syncOnboardingVisibilityRuntime,
+} from "./frontend/onboarding_runtime.js";
 import { removeRecentConnection, saveRecentConnection } from "./frontend/recent_connections.js";
 import { connectRealtime } from "./frontend/realtime.js";
 import {
@@ -234,34 +237,22 @@ function getPreferredRecentConnection() {
 }
 
 function handleDismissOnboarding(persistDismissal) {
-  if (persistDismissal) {
-    setOnboardingDismissed(true);
-  }
-  setOnboardingVisible(false);
-  render();
+  dismissOnboardingRuntime({
+    persistDismissal,
+    setOnboardingDismissed,
+    setOnboardingVisible,
+    render,
+  });
 }
 
 async function consumeIncomingConnectionUrl(incomingUrl, { clearBrowserUrl = false } = {}) {
-  const incomingConnectionLink = readIncomingConnectionLink(incomingUrl ?? "");
-  if (!incomingConnectionLink) {
-    return false;
-  }
-
-  if (clearBrowserUrl) {
-    clearIncomingConnectionLink(incomingUrl);
-  }
-
-  setConnectionConfigDraft(incomingConnectionLink.rawValue);
-  const candidate = parseConnectionConfig(incomingConnectionLink.rawValue);
-  if (candidate.ok) {
-    await applyImportedConnectionConfig(candidate.value, incomingConnectionLink.rawValue);
-    return true;
-  }
-
-  setServerConnectionState("error");
-  setServerConnectionMessage("导入链接中的连接配置无效，请检查后重试。");
-  render();
-  return true;
+  return consumeIncomingConnectionUrlRuntime({
+    incomingUrl,
+    clearBrowserUrl,
+    setConnectionConfigDraft,
+    applyImportedConnectionConfig,
+    failConnection,
+  });
 }
 
 async function handleConnectRecentConnection(serverBaseUrl) {
@@ -292,7 +283,7 @@ function handleRemoveRecentConnection(serverBaseUrl) {
 }
 
 async function handleSaveServerUrl(rawValue, rawToken) {
-  const candidate = validateServerBaseUrl(rawValue);
+  const candidate = validateServerBaseUrl(rawValue, { sanitizeServerBaseUrl });
   if (!candidate.ok) {
     failConnection(candidate.message);
     return;
@@ -305,77 +296,44 @@ async function handleSaveServerUrl(rawValue, rawToken) {
 }
 
 async function handleImportConnectionConfig(rawValue) {
-  const candidate = parseConnectionConfig(rawValue);
-  if (!candidate.ok) {
-    failConnection(candidate.message);
-    return;
-  }
-
-  await applyImportedConnectionConfig(candidate.value, rawValue);
+  await importConnectionConfigText({
+    rawValue,
+    applyImportedConnectionConfig,
+    failConnection,
+  });
 }
 
 async function handleFetchConnectionConfig(rawValue) {
-  const candidate = validateServerBaseUrl(rawValue);
-  if (!candidate.ok) {
-    failConnection(candidate.message);
-    return;
-  }
-
-  setServerConnectionState("testing");
-  setServerConnectionMessage(`正在从 ${candidate.value} 拉取服务端配置...`);
-  render();
-
-  try {
-    const payload = await fetchConnectConfig(candidate.value);
-    const serializedPayload = JSON.stringify(payload, null, 2);
-    const parsedConfig = parseConnectionConfig(serializedPayload);
-    if (!parsedConfig.ok) {
-      failConnection(parsedConfig.message);
-      return;
-    }
-
-    await applyImportedConnectionConfig(parsedConfig.value, serializedPayload);
-  } catch (error) {
-    failConnection(error.message || "拉取服务端配置失败");
-  }
+  await fetchAndImportConnectionConfig({
+    rawValue,
+    sanitizeServerBaseUrl,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+    fetchConnectConfig,
+    applyImportedConnectionConfig,
+    failConnection,
+  });
 }
 
 async function handlePasteConnectionConfig() {
-  if (!navigator.clipboard?.readText) {
-    failConnection("当前环境不支持从剪贴板读取，请手动粘贴连接配置。");
-    return;
-  }
-
-  try {
-    const text = await navigator.clipboard.readText();
-    setConnectionConfigDraft(text);
-    render();
-    await handleImportConnectionConfig(text);
-  } catch (error) {
-    console.error(error);
-    failConnection("读取剪贴板失败，请检查浏览器权限后重试。");
-  }
+  await pasteAndImportConnectionConfig({
+    setConnectionConfigDraft,
+    render,
+    importConnectionConfig: handleImportConnectionConfig,
+    failConnection,
+  });
 }
 
 async function handleScanConnectionConfig() {
-  setServerConnectionState("testing");
-  setServerConnectionMessage("正在等待二维码扫描结果...");
-  render();
-
-  try {
-    const scannedValue = await scanConnectionQrCode();
-    setConnectionConfigDraft(scannedValue);
-    render();
-    await handleImportConnectionConfig(scannedValue);
-  } catch (error) {
-    if (error instanceof QrScanCancelledError || /已取消二维码扫描/.test(error?.message ?? "")) {
-      setServerConnectionState("idle");
-      setServerConnectionMessage("已取消二维码扫描。");
-      render();
-      return;
-    }
-    failConnection(error.message || "二维码识别失败");
-  }
+  await scanAndImportConnectionConfig({
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+    setConnectionConfigDraft,
+    importConnectionConfig: handleImportConnectionConfig,
+    failConnection,
+  });
 }
 
 async function handleRefreshNetworkSnapshot() {
@@ -383,126 +341,64 @@ async function handleRefreshNetworkSnapshot() {
 }
 
 async function refreshNetworkSnapshot({ silent = false } = {}) {
-  if (!silent) {
-    setDiscoveryState("testing");
-    setServerConnectionMessage("正在读取本机网络和 Tailscale 地址...");
-    render();
-  }
-
-  const snapshot = await getNativeNetworkSnapshot();
-  setNetworkSnapshot(snapshot);
-  const discoveryCandidates = buildDiscoveryCandidates({
-    draftUrl: getState().serverDraftUrl,
-    serverBaseUrl: getState().serverBaseUrl,
-    recentConnections: getState().recentConnections,
-    networkSnapshot: snapshot,
+  await refreshNetworkSnapshotRuntime({
+    silent,
+    getState,
+    getNativeNetworkSnapshot,
+    setDiscoveryState,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    setNetworkSnapshot,
+    setDiscoveryCandidates,
+    render,
   });
-  setDiscoveryCandidates(discoveryCandidates);
-  setDiscoveryState("ready");
-
-  if (!silent) {
-    setServerConnectionState("idle");
-    setServerConnectionMessage(describeNetworkSnapshot(snapshot));
-    render();
-  }
 }
 
 async function handleProbeDiscoveryCandidates() {
-  const baseCandidates = buildDiscoveryCandidates({
-    draftUrl: getState().serverDraftUrl,
-    serverBaseUrl: getState().serverBaseUrl,
-    recentConnections: getState().recentConnections,
-    networkSnapshot: getState().networkSnapshot,
-  });
-
-  if (baseCandidates.length === 0) {
-    failConnection("还没有可测试的候选节点，请先填写节点地址或先读取本机网络。");
-    return;
-  }
-
-  setDiscoveryState("testing");
-  setDiscoveryCandidates(
-    baseCandidates.map((item) => ({
-      ...item,
-      status: "testing",
-      message: "正在测试连通性",
-    })),
-  );
-  setServerConnectionState("testing");
-  setServerConnectionMessage("正在测试候选节点连通性...");
-  render();
-
-  const results = await probeDiscoveryCandidates(baseCandidates, getState().serverDraftToken, {
+  await probeDiscoveryCandidatesRuntime({
+    getState,
+    setDiscoveryState,
+    setDiscoveryCandidates,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
     fetchMeta,
     fetchConnectConfig,
+    failConnection,
   });
-
-  setDiscoveryCandidates(results);
-  setDiscoveryState("ready");
-
-  const firstReadyCandidate = results.find((item) => item.status === "ready" || item.status === "reachable");
-  if (firstReadyCandidate) {
-    setServerConnectionState("connected");
-    setServerConnectionMessage(`已找到可用节点：${firstReadyCandidate.serverBaseUrl}`);
-  } else {
-    setServerConnectionState("error");
-    setServerConnectionMessage("没有找到可直接连通的候选节点，请检查 Tailscale、端口和 token。");
-  }
-  render();
 }
 
 async function handleUseDiscoveryCandidate(serverBaseUrl) {
-  const candidate = getState().discoveryCandidates.find((item) => item.serverBaseUrl === serverBaseUrl);
-  if (!candidate) {
-    failConnection("候选节点不存在。");
-    return;
-  }
-
-  setServerDraftUrl(candidate.serverBaseUrl);
-  if (candidate.serverToken) {
-    setServerDraftToken(candidate.serverToken);
-  }
-  setServerConnectionState("imported");
-  setServerConnectionMessage(`已填入候选节点：${candidate.serverBaseUrl}`);
-  render();
-
-  if (candidate.serverToken && (candidate.status === "ready" || candidate.status === "reachable")) {
-    await connectToServer(candidate.serverBaseUrl, candidate.serverToken, {
-      persist: true,
-      openTasksView: true,
-    });
-  }
+  await useDiscoveryCandidateRuntime({
+    serverBaseUrl,
+    getState,
+    setServerDraftUrl,
+    setServerDraftToken,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+    connectToServer,
+    failConnection,
+  });
 }
 
 async function applyImportedConnectionConfig(connectionConfig, rawValue) {
-  const { serverBaseUrl, serverToken, authRequired } = connectionConfig;
-  const nextMessage =
-    authRequired && !serverToken
-      ? `已导入节点：${serverBaseUrl}，该节点要求 token，请补充后再连接。`
-      : `已导入节点配置：${serverBaseUrl}`;
-
-  setServerDraftUrl(serverBaseUrl);
-  setServerDraftToken(serverToken);
-  setConnectionConfigDraft(rawValue);
-  setServerConnectionState("imported");
-  setServerConnectionMessage(nextMessage);
-  render();
-
-  if (authRequired && !serverToken) {
-    syncOnboardingVisibility();
-    render();
-    return;
-  }
-
-  await connectToServer(serverBaseUrl, serverToken, {
-    persist: true,
-    openTasksView: true,
-    initialSocketConfig: connectionConfig.socketConfig,
+  await applyImportedConnectionConfigRuntime({
+    connectionConfig,
+    rawValue,
+    setServerDraftUrl,
+    setServerDraftToken,
+    setConnectionConfigDraft,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+    syncOnboardingVisibility,
+    connectToServer,
   });
 }
 
 async function handleTestServerUrl(rawValue, rawToken) {
-  const candidate = validateServerBaseUrl(rawValue);
+  const candidate = validateServerBaseUrl(rawValue, { sanitizeServerBaseUrl });
   if (!candidate.ok) {
     failConnection(candidate.message);
     return;
@@ -1277,23 +1173,6 @@ function failConnection(message) {
   render();
 }
 
-function validateServerBaseUrl(rawValue) {
-  const value = sanitizeServerBaseUrl(rawValue);
-  if (!value) {
-    return { ok: false, message: "请先填写同步节点地址。" };
-  }
-
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return { ok: false, message: "同步节点地址必须以 http:// 或 https:// 开头。" };
-    }
-    return { ok: true, value: parsed.origin };
-  } catch {
-    return { ok: false, message: "同步节点地址格式不正确。" };
-  }
-}
-
 function resetBatchSelection({ disableMode = false } = {}) {
   resetBatchSelectionRuntime({
     disableMode,
@@ -1330,30 +1209,13 @@ function render() {
 }
 
 function syncOnboardingVisibility() {
-  const isMobileLike = isNativeApp() || (globalThis.matchMedia?.("(max-width: 720px)")?.matches ?? false);
-  const shouldShow = shouldShowOnboarding({
-    dismissed: getState().onboardingDismissed,
-    serverBaseUrl: getState().serverBaseUrl,
-    recentConnections: getState().recentConnections,
+  syncOnboardingVisibilityRuntime({
+    getState,
+    isNativeApp,
+    matchMedia: globalThis.matchMedia?.bind(globalThis),
+    setActiveView,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    setOnboardingVisible,
   });
-
-  if (
-    shouldDefaultToSettingsView({
-      isMobileLike,
-      serverBaseUrl: getState().serverBaseUrl,
-    })
-  ) {
-    setActiveView("settings");
-    setServerConnectionState("idle");
-    setServerConnectionMessage("请先在设置页完成节点接入。");
-  }
-
-  const useInlineFallback = shouldShow && isMobileLike;
-
-  if (useInlineFallback) {
-    setOnboardingVisible(false);
-    return;
-  }
-
-  setOnboardingVisible(shouldShow);
 }
