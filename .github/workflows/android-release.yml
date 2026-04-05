@@ -46,6 +46,27 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Configure Android signing
+        working-directory: android
+        env:
+          SSH_TODOLIST_ANDROID_KEYSTORE_BASE64: ${{ secrets.SSH_TODOLIST_ANDROID_KEYSTORE_BASE64 }}
+          SSH_TODOLIST_ANDROID_STORE_PASSWORD: ${{ secrets.SSH_TODOLIST_ANDROID_STORE_PASSWORD }}
+          SSH_TODOLIST_ANDROID_KEY_ALIAS: ${{ secrets.SSH_TODOLIST_ANDROID_KEY_ALIAS }}
+          SSH_TODOLIST_ANDROID_KEY_PASSWORD: ${{ secrets.SSH_TODOLIST_ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$SSH_TODOLIST_ANDROID_KEYSTORE_BASE64" ] || [ -z "$SSH_TODOLIST_ANDROID_STORE_PASSWORD" ] || [ -z "$SSH_TODOLIST_ANDROID_KEY_ALIAS" ] || [ -z "$SSH_TODOLIST_ANDROID_KEY_PASSWORD" ]; then
+            echo "Android signing secrets are not fully configured; release APK/AAB will be unsigned."
+            exit 0
+          fi
+
+          printf '%s' "$SSH_TODOLIST_ANDROID_KEYSTORE_BASE64" | openssl base64 -d -A > ssh-todolist-release.jks
+          cat > signing.properties <<EOF
+          SSH_TODOLIST_ANDROID_STORE_FILE=$GITHUB_WORKSPACE/android/ssh-todolist-release.jks
+          SSH_TODOLIST_ANDROID_STORE_PASSWORD=$SSH_TODOLIST_ANDROID_STORE_PASSWORD
+          SSH_TODOLIST_ANDROID_KEY_ALIAS=$SSH_TODOLIST_ANDROID_KEY_ALIAS
+          SSH_TODOLIST_ANDROID_KEY_PASSWORD=$SSH_TODOLIST_ANDROID_KEY_PASSWORD
+          EOF
+
       - name: Validate frontend
         run: npm run check
 
@@ -61,14 +82,27 @@ jobs:
       - name: Build release AAB
         run: npm run android:build:aab
 
+      - name: Collect Android artifacts
+        id: collect_android_artifacts
+        run: |
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/app-debug.apk
+
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk release-assets/app-release.apk
+            echo "release_apk=release-assets/app-release.apk" >> "$GITHUB_OUTPUT"
+          else
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/app-release-unsigned.apk
+            echo "release_apk=release-assets/app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
+          fi
+
+          cp android/app/build/outputs/bundle/release/app-release.aab release-assets/app-release.aab
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ssh-todolist-android-${{ github.ref_name }}
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
-            android/app/build/outputs/bundle/release/app-release.aab
+          path: release-assets/*
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -77,6 +111,6 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
-            android/app/build/outputs/bundle/release/app-release.aab
+            release-assets/app-debug.apk
+            ${{ steps.collect_android_artifacts.outputs.release_apk }}
+            release-assets/app-release.aab

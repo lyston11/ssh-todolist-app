@@ -140,7 +140,7 @@ conda run -n ssh-todolist npm run android:build:aab
 默认产物路径：
 
 - `android/app/build/outputs/apk/debug/app-debug.apk`
-- `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+- `android/app/build/outputs/apk/release/app-release.apk`
 - `android/app/build/outputs/bundle/release/app-release.aab`
 
 GitHub 自动发布：
@@ -149,13 +149,18 @@ GitHub 自动发布：
 - 推送到 `main` 时会自动构建并上传 Android artifacts
 - 推送 `v*` 标签时会自动创建 GitHub Release，并附带：
   - `app-debug.apk`
-  - `app-release-unsigned.apk`
+  - `app-release.apk` 或 `app-release-unsigned.apk`
   - `app-release.aab`
+- 如果给 GitHub 仓库配置了以下 secrets，CI 会自动生成已签名 release 包：
+  - `SSH_TODOLIST_ANDROID_KEYSTORE_BASE64`
+  - `SSH_TODOLIST_ANDROID_STORE_PASSWORD`
+  - `SSH_TODOLIST_ANDROID_KEY_ALIAS`
+  - `SSH_TODOLIST_ANDROID_KEY_PASSWORD`
 
 版本：
 
-- Android `versionName` 当前为 `0.10`
-- `package.json` 当前版本为 `0.10.0`
+- Android `versionName` 当前为 `1.00`
+- `package.json` 当前版本为 `1.0.0`
 
 正式签名：
 
@@ -166,6 +171,7 @@ GitHub 自动发布：
   - `SSH_TODOLIST_ANDROID_KEY_ALIAS`
   - `SSH_TODOLIST_ANDROID_KEY_PASSWORD`
 - 如果没有配置签名，`assembleRelease` 产物会是未签名的 `app-release-unsigned.apk`
+- 如果已经配置签名，`assembleRelease` 产物会是可分发的 `app-release.apk`
 
 生成 keystore：
 
