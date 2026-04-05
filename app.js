@@ -1,5 +1,4 @@
 import {
-  ApiError,
   clearCompletedTodos,
   createList,
   createTodo,
@@ -11,7 +10,6 @@ import {
   updateList,
   updateTodo,
 } from "./frontend/api.js";
-import { resolveSocketConfig } from "./frontend/connection_config.js";
 import {
   applyImportedConnectionConfig as applyImportedConnectionConfigRuntime,
   consumeIncomingConnectionUrl as consumeIncomingConnectionUrlRuntime,
@@ -37,8 +35,7 @@ import {
   dismissOnboarding as dismissOnboardingRuntime,
   syncOnboardingVisibility as syncOnboardingVisibilityRuntime,
 } from "./frontend/onboarding_runtime.js";
-import { removeRecentConnection, saveRecentConnection } from "./frontend/recent_connections.js";
-import { connectRealtime } from "./frontend/realtime.js";
+import { removeRecentConnection } from "./frontend/recent_connections.js";
 import {
   clearSelectedTodoIds,
   setDiscoveryCandidates,
@@ -117,6 +114,15 @@ import {
   persistSnapshot,
   runServerMutation as runServerMutationRuntime,
 } from "./frontend/sync_runtime.js";
+import {
+  connectToServer as connectToServerRuntime,
+  handleLifecycleOffline as handleLifecycleOfflineRuntime,
+  handleLifecycleOnline as handleLifecycleOnlineRuntime,
+  handleSyncError as handleSyncErrorRuntime,
+  isAuthError as isAuthErrorRuntime,
+  refreshSnapshot as refreshSnapshotRuntime,
+  resumeServerSync as resumeServerSyncRuntime,
+} from "./frontend/session_runtime.js";
 
 let realtimeConnection = null;
 let removeIncomingLinkListener = () => {};
@@ -926,85 +932,54 @@ async function connectToServer(
   serverToken,
   { persist, openTasksView, initialSocketConfig = null },
 ) {
-  setServerConnectionState("testing");
-  setServerConnectionMessage(`正在连接 ${serverBaseUrl || "同步节点"}...`);
-  setSyncState("connecting");
-  setPendingOperations(loadPendingOperations(serverBaseUrl, serverToken).length);
-  render();
-
-  try {
-    await flushPendingQueue(serverBaseUrl, serverToken);
-    const meta = await fetchMeta(serverBaseUrl, serverToken);
-    setSocketConfig(resolveSocketConfig(meta, initialSocketConfig ?? getState().socketConfig));
-
-    if (persist) {
-      setServerBaseUrl(serverBaseUrl);
-      setServerDraftUrl(serverBaseUrl);
-      setServerToken(serverToken);
-      setServerDraftToken(serverToken);
-    }
-
-    await refreshSnapshot(serverBaseUrl, serverToken);
-    resetBatchSelection({ disableMode: true });
-    setServerConnectionState("connected");
-    setServerConnectionMessage(`已连接节点：${serverBaseUrl}`);
-    setOnboardingDismissed(true);
-    setOnboardingVisible(false);
-    setRecentConnections(
-      saveRecentConnection({
-        serverBaseUrl,
-        serverToken,
-        authRequired: meta.authRequired === true,
-      }),
-    );
-
-    realtimeConnection?.disconnect();
-    realtimeConnection = connectRealtime({
-      serverBaseUrl: () => getState().serverBaseUrl,
-      authToken: () => getState().serverToken,
-      socketConfig: () => getState().socketConfig,
-      onConnecting: () => {
-        setSyncState("connecting");
-        render();
-      },
-      onOnline: async () => {
-        setSyncState("online");
-        await flushPendingQueue(getState().serverBaseUrl, getState().serverToken);
-        await refreshSnapshot(getState().serverBaseUrl, getState().serverToken);
-        render();
-      },
-      onOffline: () => {
-        setSyncState("offline");
-        render();
-      },
-      onSnapshot: (snapshot) => {
-        applySnapshot(snapshot, {
-          preserveActiveList: true,
-          serverBaseUrl: getState().serverBaseUrl,
-          serverToken: getState().serverToken,
-        });
-        persistCurrentSnapshot();
-        render();
-      },
-    });
-
-    if (openTasksView) {
-      setActiveView("tasks");
-    }
-    await refreshNetworkSnapshot({ silent: true });
-    render();
-  } catch (error) {
-    handleSyncError(error);
-  }
+  await connectToServerRuntime({
+    serverBaseUrl,
+    serverToken,
+    persist,
+    openTasksView,
+    initialSocketConfig,
+    getState,
+    loadPendingOperations,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    setSyncState,
+    setPendingOperations,
+    render,
+    flushPendingQueue,
+    fetchMeta,
+    refreshSnapshot,
+    setSocketConfig,
+    setServerBaseUrl,
+    setServerDraftUrl,
+    setServerToken,
+    setServerDraftToken,
+    resetBatchSelection,
+    setOnboardingDismissed,
+    setOnboardingVisible,
+    setRecentConnections,
+    disconnectRealtime: () => realtimeConnection?.disconnect(),
+    setRealtimeConnection: (connection) => {
+      realtimeConnection = connection;
+    },
+    applySnapshot,
+    persistCurrentSnapshot,
+    setActiveView,
+    refreshNetworkSnapshot,
+    handleSyncError,
+  });
 }
 
 async function refreshSnapshot(
   serverBaseUrl = getState().serverBaseUrl,
   serverToken = getState().serverToken,
 ) {
-  const snapshot = await fetchSnapshot(serverBaseUrl, serverToken);
-  applySnapshot(snapshot, { preserveActiveList: true, serverBaseUrl, serverToken });
-  persistCurrentSnapshot(serverBaseUrl, serverToken);
+  await refreshSnapshotRuntime({
+    serverBaseUrl,
+    serverToken,
+    fetchSnapshot,
+    applySnapshot,
+    persistCurrentSnapshot,
+  });
 }
 
 async function flushPendingQueue(serverBaseUrl, serverToken) {
@@ -1098,34 +1073,37 @@ function restoreLocalSnapshot(snapshot) {
 }
 
 function isAuthError(error) {
-  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+  return isAuthErrorRuntime(error);
 }
 
 function handleSyncError(error, message = null) {
-  console.error(error);
-  setSyncState("offline");
-  setServerConnectionState("error");
-  setServerConnectionMessage(message || error.message || "同步服务不可用");
-  render();
+  handleSyncErrorRuntime({
+    error,
+    message,
+    setSyncState,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+  });
 }
 
 function handleLifecycleOffline() {
-  if (!getState().serverBaseUrl) {
-    return;
-  }
-  setSyncState("offline");
-  setServerConnectionState("error");
-  setServerConnectionMessage("当前设备已离线，待恢复网络后会自动重连。");
-  render();
+  handleLifecycleOfflineRuntime({
+    serverBaseUrl: getState().serverBaseUrl,
+    setSyncState,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+  });
 }
 
 function handleLifecycleOnline() {
-  if (!getState().serverBaseUrl) {
-    return;
-  }
-  setServerConnectionState("testing");
-  setServerConnectionMessage("网络已恢复，正在尝试重新建立同步连接...");
-  render();
+  handleLifecycleOnlineRuntime({
+    serverBaseUrl: getState().serverBaseUrl,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+  });
 }
 
 async function handleLifecycleResume(reason) {
@@ -1133,38 +1111,22 @@ async function handleLifecycleResume(reason) {
   await resumeServerSync(reason);
 }
 
-async function resumeServerSync(reason) {
-  if (!getState().serverBaseUrl || resumeSyncPromise) {
-    return resumeSyncPromise;
-  }
-
-  const shouldAnnounce =
-    getState().syncState !== "online" || reason === "online" || getState().serverConnectionState === "error";
-
-  if (shouldAnnounce) {
-    setServerConnectionState("testing");
-    setServerConnectionMessage("正在恢复同步连接...");
-    render();
-  }
-
-  resumeSyncPromise = (async () => {
-    try {
-      realtimeConnection?.reconnectNow?.();
-      await flushPendingQueue(getState().serverBaseUrl, getState().serverToken);
-      await refreshSnapshot(getState().serverBaseUrl, getState().serverToken);
-      setServerConnectionState("connected");
-      if (shouldAnnounce) {
-        setServerConnectionMessage(`已恢复同步：${getState().serverBaseUrl}`);
-      }
-      render();
-    } catch (error) {
-      handleSyncError(error, "恢复同步失败，稍后会继续自动重试。");
-    } finally {
-      resumeSyncPromise = null;
-    }
-  })();
-
-  return resumeSyncPromise;
+function resumeServerSync(reason) {
+  return resumeServerSyncRuntime({
+    reason,
+    getState,
+    getResumeSyncPromise: () => resumeSyncPromise,
+    setResumeSyncPromise: (promise) => {
+      resumeSyncPromise = promise;
+    },
+    getRealtimeConnection: () => realtimeConnection,
+    flushPendingQueue,
+    refreshSnapshot,
+    setServerConnectionState,
+    setServerConnectionMessage,
+    render,
+    handleSyncError,
+  });
 }
 
 function failConnection(message) {
