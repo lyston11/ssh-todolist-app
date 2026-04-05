@@ -1,3 +1,9 @@
+import {
+  buildBatchSelectionSummary,
+  filterTodos,
+  getVisibleTodos,
+} from "./todo_queries.js";
+
 const elements = {
   appCard: document.querySelector(".app-card"),
   onboardingOverlay: document.querySelector("#onboarding-overlay"),
@@ -81,7 +87,9 @@ const elements = {
   editDialog: document.querySelector("#edit-dialog"),
   editForm: document.querySelector("#edit-form"),
   editorTitle: document.querySelector("#editor-title"),
+  editorDescription: document.querySelector("#editor-description"),
   editInput: document.querySelector("#edit-input"),
+  editCharacterCount: document.querySelector("#edit-character-count"),
   editListSelect: document.querySelector("#edit-list-select"),
   closeEditorButton: document.querySelector("#close-editor"),
   cancelEditButton: document.querySelector("#cancel-edit"),
@@ -173,6 +181,10 @@ export function initUI(handlers) {
 
   elements.connectionConfigInput.addEventListener("input", (event) => {
     handlers.onConnectionConfigInput(event.target.value);
+  });
+
+  elements.editInput.addEventListener("input", () => {
+    renderEditCharacterCount();
   });
 
   elements.connectionForm.addEventListener("submit", async (event) => {
@@ -556,11 +568,16 @@ export function resetComposer() {
 
 export function openEditDialog({ todo, lists, mode }) {
   elements.editorTitle.textContent = mode === "create" ? "新建任务" : "编辑任务";
+  elements.editorDescription.textContent =
+    mode === "create"
+      ? "直接写下这次要完成的具体动作，手机上会优先给你更宽的编辑区域。"
+      : "你可以改任务标题、切换所属清单，保存后会继续同步到当前节点。";
   elements.editInput.value = todo.title;
+  renderEditCharacterCount();
   renderEditorLists(lists, todo.listId);
   elements.editDialog.showModal();
   elements.editInput.focus();
-  elements.editInput.select();
+  elements.editInput.setSelectionRange(0, elements.editInput.value.length);
 }
 
 export function closeEditDialog() {
@@ -930,7 +947,7 @@ function renderFilters(currentFilter) {
 
 function renderBatchToolbar(state) {
   const visibleTodos = getVisibleTodos(state);
-  const filteredTodos = getFilteredTodos(visibleTodos, state.currentFilter);
+  const filteredTodos = filterTodos(visibleTodos, state.currentFilter);
   const selectedTodoIds = new Set(state.selectedTodoIds);
   const selectedTodos = filteredTodos.filter((todo) => selectedTodoIds.has(todo.id));
   const hasVisibleTodos = filteredTodos.length > 0;
@@ -964,7 +981,7 @@ function renderBatchToolbar(state) {
 
 function renderTodos(state) {
   const visibleTodos = getVisibleTodos(state);
-  const filteredTodos = getFilteredTodos(visibleTodos, state.currentFilter);
+  const filteredTodos = filterTodos(visibleTodos, state.currentFilter);
   const listTitleById = new Map(state.lists.map((list) => [list.id, list.title]));
   const selectedTodoIds = new Set(state.selectedTodoIds);
   elements.todoList.innerHTML = "";
@@ -1057,6 +1074,13 @@ function renderEditorLists(lists, activeListId) {
   });
 }
 
+function renderEditCharacterCount() {
+  const maxLength = Number(elements.editInput.maxLength) || 120;
+  const currentLength = elements.editInput.value.length;
+  elements.editCharacterCount.textContent = `${currentLength} / ${maxLength}`;
+  elements.editCharacterCount.dataset.state = currentLength >= maxLength ? "limit" : "default";
+}
+
 function renderBatchMoveOptions(state, selectedTodos) {
   elements.batchMoveListSelect.innerHTML = "";
 
@@ -1092,22 +1116,6 @@ function renderBatchMoveOptions(state, selectedTodos) {
   }
 }
 
-function getVisibleTodos(state) {
-  return state.activeListId ? state.todos.filter((todo) => todo.listId === state.activeListId) : state.todos;
-}
-
-function getFilteredTodos(todos, currentFilter) {
-  if (currentFilter === "active") {
-    return todos.filter((todo) => !todo.completed);
-  }
-
-  if (currentFilter === "completed") {
-    return todos.filter((todo) => todo.completed);
-  }
-
-  return todos;
-}
-
 function formatDate(timestamp) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
@@ -1136,18 +1144,6 @@ function buildTodoPanelMeta({ syncState, visibleCount, filteredCount, completedC
   }
 
   return `${syncLabel} · 共 ${visibleCount} 项任务 · ${completedCount} 项已完成 · 当前筛选显示 ${filteredCount} 项（${filterLabel}）`;
-}
-
-function buildBatchSelectionSummary({ hasVisibleTodos, visibleCount, selectedCount }) {
-  if (!hasVisibleTodos) {
-    return "当前视图没有可批量操作的任务";
-  }
-
-  if (selectedCount === 0) {
-    return `已进入批量模式，当前视图共有 ${visibleCount} 项任务`;
-  }
-
-  return `已选择 ${selectedCount} 项任务，当前视图共有 ${visibleCount} 项`;
 }
 
 function buildEmptyStateMessage(state, visibleTodos, filteredTodos) {

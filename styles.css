@@ -619,7 +619,8 @@ button:disabled {
 }
 
 .todo-form input,
-.edit-form input {
+.edit-form input,
+.edit-form textarea {
   width: 100%;
   border: 1px solid rgba(20, 38, 62, 0.12);
   border-radius: 16px;
@@ -630,7 +631,8 @@ button:disabled {
 }
 
 .todo-form input:focus,
-.edit-form input:focus {
+.edit-form input:focus,
+.edit-form textarea:focus {
   outline: none;
   border-color: rgba(255, 122, 89, 0.48);
   box-shadow: 0 0 0 5px rgba(255, 122, 89, 0.12);
@@ -1171,6 +1173,32 @@ button:disabled {
   padding: 24px;
 }
 
+.editor-description {
+  margin: -4px 0 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.edit-form textarea {
+  min-height: 132px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.editor-support-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.character-count {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.character-count[data-state="limit"] {
+  color: var(--accent-strong);
+}
+
 .dialog-header {
   display: flex;
   justify-content: space-between;
@@ -1189,6 +1217,11 @@ button:disabled {
   background: rgba(255, 255, 255, 0.86);
   padding: 14px 16px;
   color: var(--text-main);
+}
+
+.edit-form .dialog-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .fab-button {
@@ -1373,6 +1406,24 @@ button:disabled {
     min-height: 100dvh;
     align-content: start;
     padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .edit-form textarea {
+    min-height: 180px;
+  }
+
+  .edit-form .dialog-actions {
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
+    margin: 8px -18px calc(-22px - env(safe-area-inset-bottom, 0px));
+    padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(255, 250, 245, 0), rgba(255, 250, 245, 0.98) 28%);
+  }
+
+  .edit-form .dialog-actions button {
+    flex: 1 1 0;
+    min-height: 48px;
+    justify-content: center;
   }
 
   .todo-item {

@@ -284,8 +284,20 @@
           <h2 id="editor-title">编辑任务</h2>
           <button class="ghost-button" type="button" id="close-editor">关闭</button>
         </div>
+        <p id="editor-description" class="editor-description">你可以修改任务标题和所属清单。</p>
         <label class="sr-only" for="edit-input">编辑任务内容</label>
-        <input id="edit-input" name="editTodo" type="text" maxlength="120" required />
+        <textarea
+          id="edit-input"
+          name="editTodo"
+          rows="4"
+          maxlength="120"
+          enterkeyhint="done"
+          placeholder="把任务写得更具体一点，例如：完成 Android 首屏布局"
+          required
+        ></textarea>
+        <div class="editor-support-row">
+          <span id="edit-character-count" class="character-count">0 / 120</span>
+        </div>
         <label class="sr-only" for="edit-list-select">所属清单</label>
         <select id="edit-list-select" name="editList"></select>
         <div class="dialog-actions">

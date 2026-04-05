@@ -82,6 +82,12 @@ import {
   renderApp,
   resetComposer,
 } from "./frontend/ui.js";
+import {
+  getCurrentViewTodos,
+  getSelectedTodoIds,
+  getSelectedTodos,
+  resolveBatchMoveListId,
+} from "./frontend/todo_queries.js";
 
 let realtimeConnection = null;
 let removeIncomingLinkListener = () => {};
@@ -553,7 +559,7 @@ function handleToggleSelectionMode() {
 }
 
 function handleSelectVisibleTodos() {
-  const visibleTodoIds = getCurrentViewTodos().map((todo) => todo.id);
+  const visibleTodoIds = getCurrentViewTodos(getState()).map((todo) => todo.id);
   setSelectionMode(true);
   setSelectedTodoIds(visibleTodoIds);
   syncBatchMoveTarget();
@@ -576,7 +582,7 @@ function handleToggleTodoSelection(todoId, selected) {
 }
 
 async function handleBatchCompleteTodos() {
-  const selectedTodos = getSelectedTodos().filter((todo) => !todo.completed);
+  const selectedTodos = getSelectedTodos(getState()).filter((todo) => !todo.completed);
   if (selectedTodos.length === 0) {
     return;
   }
@@ -600,7 +606,7 @@ async function handleBatchCompleteTodos() {
 }
 
 async function handleBatchUncompleteTodos() {
-  const selectedTodos = getSelectedTodos().filter((todo) => todo.completed);
+  const selectedTodos = getSelectedTodos(getState()).filter((todo) => todo.completed);
   if (selectedTodos.length === 0) {
     return;
   }
@@ -624,7 +630,7 @@ async function handleBatchUncompleteTodos() {
 }
 
 async function handleBatchDeleteTodos() {
-  const selectedTodoIds = getSelectedTodoIds();
+  const selectedTodoIds = getSelectedTodoIds(getState());
   if (selectedTodoIds.length === 0) {
     return;
   }
@@ -657,7 +663,7 @@ function handleBatchMoveListChange(listId) {
 
 async function handleBatchMoveTodos() {
   const targetListId = getState().batchMoveListId;
-  const selectedTodos = getSelectedTodos().filter((todo) => todo.listId !== targetListId);
+  const selectedTodos = getSelectedTodos(getState()).filter((todo) => todo.listId !== targetListId);
   if (!targetListId || selectedTodos.length === 0) {
     return;
   }
@@ -1337,33 +1343,6 @@ function validateServerBaseUrl(rawValue) {
   }
 }
 
-function getCurrentViewTodos(state = getState()) {
-  const visibleTodos = state.activeListId ? state.todos.filter((todo) => todo.listId === state.activeListId) : state.todos;
-  return filterTodos(visibleTodos, state.currentFilter);
-}
-
-function filterTodos(todos, filter) {
-  if (filter === "active") {
-    return todos.filter((todo) => !todo.completed);
-  }
-
-  if (filter === "completed") {
-    return todos.filter((todo) => todo.completed);
-  }
-
-  return todos;
-}
-
-function getSelectedTodoIds() {
-  const selectableTodoIds = new Set(getCurrentViewTodos().map((todo) => todo.id));
-  return getState().selectedTodoIds.filter((todoId) => selectableTodoIds.has(todoId));
-}
-
-function getSelectedTodos() {
-  const selectedTodoIdSet = new Set(getSelectedTodoIds());
-  return getState().todos.filter((todo) => selectedTodoIdSet.has(todo.id));
-}
-
 function resetBatchSelection({ disableMode = false } = {}) {
   clearSelectedTodoIds();
   if (disableMode) {
@@ -1379,33 +1358,13 @@ function syncBatchSelection({ visibleOnly = false } = {}) {
   }
 
   const allowedTodoIds = new Set(
-    (visibleOnly ? getCurrentViewTodos() : getState().todos).map((todo) => todo.id),
+    (visibleOnly ? getCurrentViewTodos(getState()) : getState().todos).map((todo) => todo.id),
   );
   setSelectedTodoIds(getState().selectedTodoIds.filter((todoId) => allowedTodoIds.has(todoId)));
 }
 
 function syncBatchMoveTarget() {
-  setBatchMoveListId(resolveBatchMoveListId());
-}
-
-function resolveBatchMoveListId() {
-  const { lists, batchMoveListId } = getState();
-  if (lists.length === 0) {
-    return "";
-  }
-
-  if (batchMoveListId && lists.some((list) => list.id === batchMoveListId)) {
-    return batchMoveListId;
-  }
-
-  const selectedSourceListIds = new Set(getSelectedTodos().map((todo) => todo.listId));
-  const firstOtherList = lists.find((list) => !selectedSourceListIds.has(list.id));
-  if (firstOtherList) {
-    return firstOtherList.id;
-  }
-
-  const activeListId = getActiveListId();
-  return lists.find((list) => list.id === activeListId)?.id ?? lists[0]?.id ?? "";
+  setBatchMoveListId(resolveBatchMoveListId(getState()));
 }
 
 function applyTodoPatches(patches) {
