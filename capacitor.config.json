@@ -1,6 +1,6 @@
 {
   "appId": "com.lyston11.sshtodolist",
-  "appName": "Focus List",
+  "appName": "SSH Todo",
   "webDir": "mobile/www",
   "bundledWebRuntime": false
 }

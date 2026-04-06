@@ -1,6 +1,6 @@
 # ssh-todolist-app
 
-`ssh-todolist-app` 是 Focus List 的独立应用工程，负责 Web UI、Android 打包、离线缓存和同步交互。
+`ssh-todolist-app` 是 SSH Todo 的独立应用工程，负责 Web UI、Android 打包、离线缓存和同步交互。
 
 ## 职责
 
@@ -15,14 +15,14 @@
 ## 目录
 
 - `index.html`: 页面骨架
-- `styles.css`: 样式
-- `app.js`: 前端编排入口
-- `frontend/`: API、realtime、state、ui、offline 分层代码
-- `scripts/build_web.mjs`: 生成独立 Web 分发目录
-- `scripts/prepare_mobile.mjs`: 生成 Capacitor Web 资源
-- `scripts/serve_web.mjs`: 本地静态预览服务
+- `src/`: React + TypeScript 前端源码
+- `src/api/`: REST API 客户端
+- `src/realtime/`: WebSocket 同步层
+- `src/state/`: 连接状态与 Todo 状态管理
+- `src/features/`: 连接、任务、设置等页面模块
+- `scripts/build_android.mjs`: Android 构建脚本
+- `scripts/generate_keystore.mjs`: Android 签名文件生成脚本
 - `android/`: Capacitor Android 工程
-- `tests/frontend_offline.test.mjs`: 前端离线逻辑回归测试
 
 ## 安装与运行
 
@@ -111,6 +111,8 @@ conda run -n ssh-todolist npm run android:open
 - Android 包内只包含前端静态资源
 - 真正的同步节点仍然是独立部署的 `ssh-todolist-services`
 - App 内需配置 Tailscale 节点地址和 token
+- `src/lib/bridge.ts` 依赖 Capacitor 原生插件 `DeviceBridge` / `IncomingLink`
+- 如果没有接入原生插件，Web 端和普通浏览器会自动回退到只显示占位网络信息
 - 当前 Android 构建脚本支持 Java 17 及以上
 - 当前本机 SDK 路径可写在 `android/local.properties` 中，例如 `sdk.dir=/Users/lyston/Library/Android/sdk`
 - `npm run android:build:*` 和 `npm run android:keystore` 会优先使用 `JAVA_HOME`，其次尝试 macOS `/usr/libexec/java_home`，最后回退到 `PATH` 中的 JDK

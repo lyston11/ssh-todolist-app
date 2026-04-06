@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build_web.mjs",
-    "check": "node --check app.js frontend/api.js frontend/connection_config.js frontend/connection_link.js frontend/connection_runtime.js frontend/crud_runtime.js frontend/discovery.js frontend/lifecycle.js frontend/mutation_runtime.js frontend/native_bridge.js frontend/offline.js frontend/onboarding.js frontend/onboarding_runtime.js frontend/qr_scanner.js frontend/realtime.js frontend/recent_connections.js frontend/selection_runtime.js frontend/session_runtime.js frontend/state.js frontend/sync_runtime.js frontend/todo_data.js frontend/todo_queries.js frontend/ui.js frontend/ui_connection.js frontend/ui_dialogs.js frontend/ui_dom.js frontend/ui_events.js frontend/ui_todos.js scripts/build_android.mjs scripts/build_web.mjs scripts/generate_keystore.mjs scripts/lib/copy_web_assets.mjs scripts/lib/java_runtime.mjs scripts/prepare_mobile.mjs scripts/serve_web.mjs",
-    "test": "node --test tests/*.test.mjs",
-    "web:serve": "node scripts/serve_web.mjs",
-    "mobile:prepare": "node scripts/prepare_mobile.mjs",
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "web:serve": "vite --host 127.0.0.1 --port 4173",
+    "mobile:prepare": "vite build --outDir mobile/www --emptyOutDir",
     "android:add": "npm run mobile:prepare && npx cap add android",
     "android:sync": "npm run mobile:prepare && npx cap sync android",
     "android:open": "npx cap open android",
@@ -20,6 +22,20 @@
   "dependencies": {
     "@capacitor/android": "^8.3.0",
     "@capacitor/cli": "^8.3.0",
-    "@capacitor/core": "^8.3.0"
+    "@capacitor/core": "^8.3.0",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
   }
 }
