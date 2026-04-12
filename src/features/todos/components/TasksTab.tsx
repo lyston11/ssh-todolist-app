@@ -1,6 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { CalendarDays, Check, CheckSquare, CloudUpload, Clock, Plus, RefreshCw, Square, WandSparkles } from 'lucide-react';
+import { CalendarDays, Check, CheckSquare, ClipboardList, CloudUpload, Plus, RefreshCw, Square } from 'lucide-react';
 import { TodoItem, TodoList } from '../../../types/api';
 import { formatDueDate } from '../lib/dates';
 
@@ -43,32 +42,63 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   onToggleTaskCompletion,
   onOpenNewTask
 }) => {
+  const activeCount = filteredTasks.filter((task) => !task.completed).length;
+  const completedCount = filteredTasks.length - activeCount;
+
   return (
-    <>
-      <div className="space-y-4">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+    <div className="space-y-4">
+      <section className="overflow-x-auto border-b border-white/10 pb-1 no-scrollbar">
+        <div className="flex min-w-max gap-4">
           {lists.map((todoList) => (
             <button
               key={todoList.id}
               onClick={() => onSelectList(todoList.id)}
-              className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+              className={`border-b-2 px-1 pb-2 text-sm transition-colors ${
                 activeListId === todoList.id
-                  ? 'border border-white/20 bg-white/10 text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'border-emerald-400 text-white'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
               }`}
             >
               {todoList.title}
             </button>
           ))}
         </div>
+      </section>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <section className="space-y-3 rounded-lg border border-white/10 bg-[#181b1f] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-md bg-[#111315] p-1">
+            {(['all', 'active', 'completed'] as const).map((filterValue) => (
+              <button
+                key={filterValue}
+                onClick={() => onSelectTaskFilter(filterValue)}
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  taskFilter === filterValue ? 'bg-[#23272d] text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {filterValue === 'all' ? '全部' : filterValue === 'active' ? '进行中' : '已完成'}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onToggleBatchMode}
+            className={`ml-auto rounded-md border px-3 py-1.5 text-sm transition-colors ${
+              isBatchMode
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+                : 'border-white/10 text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            {isBatchMode ? '结束批量' : '批量处理'}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => onSelectCategory('all')}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+            className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
               categoryFilter === 'all'
-                ? 'border border-white/20 bg-white/10 text-white'
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'border-white/20 bg-white/10 text-white'
+                : 'border-white/10 text-slate-400 hover:text-white'
             }`}
           >
             全部分类
@@ -77,10 +107,10 @@ export const TasksTab: React.FC<TasksTabProps> = ({
             <button
               key={tag}
               onClick={() => onSelectCategory(tag)}
-              className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
                 categoryFilter === tag
-                  ? 'bg-emerald-500 text-black'
-                  : 'border border-white/5 bg-white/5 text-slate-500'
+                  ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+                  : 'border-white/10 text-slate-400 hover:text-white'
               }`}
             >
               {tag}
@@ -88,63 +118,47 @@ export const TasksTab: React.FC<TasksTabProps> = ({
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex rounded-xl border border-white/5 bg-white/5 p-1">
-            {(['all', 'active', 'completed'] as const).map((filterValue) => (
-              <button
-                key={filterValue}
-                onClick={() => onSelectTaskFilter(filterValue)}
-                className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  taskFilter === filterValue ? 'bg-emerald-500 text-black' : 'text-slate-500'
-                }`}
-              >
-                {filterValue === 'all' ? '全部' : filterValue === 'active' ? '进行中' : '已完成'}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            {pendingCount > 0 && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1">
-                <CloudUpload className="h-3 w-3 text-amber-500" />
-                <span className="text-[9px] font-bold text-amber-500">{pendingCount}</span>
-              </div>
-            )}
-            {isSyncing && <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-500" />}
-            <button
-              onClick={onToggleBatchMode}
-              className={`rounded-xl border px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                isBatchMode
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
-                  : 'border-white/10 bg-white/5 text-slate-300'
-              }`}
-            >
-              {isBatchMode ? '完成选择' : '批量处理'}
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3 text-xs text-slate-400">
+          <span>当前 {filteredTasks.length} 项</span>
+          <span>进行中 {activeCount} 项</span>
+          <span>已完成 {completedCount} 项</span>
+          {pendingCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 text-amber-300">
+              <CloudUpload className="h-3.5 w-3.5" />
+              <span>{pendingCount} 条待同步</span>
+            </div>
+          )}
+          {isSyncing && (
+            <div className="inline-flex items-center gap-1.5 text-emerald-300">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              <span>正在同步</span>
+            </div>
+          )}
+          {!pendingCount && !isSyncing && <span>列表会在连接恢复后自动同步。</span>}
         </div>
-      </div>
+      </section>
 
-      <div className="mt-4 space-y-2 pb-32">
+      <section className="space-y-2 pb-6">
         {filteredTasks.length > 0 ? (
           filteredTasks.map((task) => {
             const isSelected = selectedTaskIds.has(task.id);
+            const listTitle = lists.find((todoList) => todoList.id === task.listId)?.title || '未分组';
             return (
-              <motion.div
+              <div
                 key={task.id}
-                layout
                 onClick={() => onTaskPress(task)}
-                className={`group flex cursor-pointer items-center gap-4 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                className={`group flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition-colors ${
                   isBatchMode && isSelected
-                    ? 'border-emerald-500/30 bg-emerald-500/10'
+                    ? 'border-emerald-400/40 bg-emerald-500/10'
                     : task.completed
-                      ? 'border-transparent bg-white/[0.02] opacity-60'
-                      : 'border-white/5 bg-white/5 hover:border-white/10'
+                      ? 'border-white/5 bg-[#15181c] opacity-70'
+                      : 'border-white/10 bg-[#181b1f] hover:border-white/20'
                 }`}
               >
                 {isBatchMode ? (
-                  <div className="flex h-6 w-6 items-center justify-center">
+                  <div className="flex h-6 w-6 items-center justify-center pt-0.5">
                     {isSelected ? (
-                      <CheckSquare className="h-5 w-5 text-emerald-500" />
+                      <CheckSquare className="h-5 w-5 text-emerald-400" />
                     ) : (
                       <Square className="h-5 w-5 text-slate-500" />
                     )}
@@ -155,67 +169,54 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       event.stopPropagation();
                       onToggleTaskCompletion(task);
                     }}
-                    className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all ${
+                    className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border transition-colors ${
                       task.completed
-                        ? 'border-emerald-500 bg-emerald-500'
-                        : 'border-slate-700 group-hover:border-emerald-500/50'
+                        ? 'border-emerald-400 bg-emerald-400 text-black'
+                        : 'border-slate-600 text-transparent group-hover:border-emerald-400'
                     }`}
                   >
-                    {task.completed && <Check className="h-3.5 w-3.5 text-black" />}
+                    <Check className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <div className="min-w-0 flex-1">
-                  <h3 className={`truncate text-sm font-medium text-white ${task.completed ? 'text-slate-500 line-through' : ''}`}>
-                    {task.title}
-                  </h3>
-                  <div className="mt-1.5 flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-[10px] font-mono text-slate-500">
-                      <Clock className="h-3 w-3" />
-                      {task.completedAt ? '已完成' : '待处理'}
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={`min-w-0 text-sm font-medium ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
+                      {task.title}
+                    </div>
+                    <span className="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-400">
+                      {listTitle}
                     </span>
-                    {task.tag && (
-                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-emerald-400">
-                        {task.tag}
-                      </span>
-                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span>{task.completedAt ? '已完成' : '待处理'}</span>
                     {task.dueAt && (
-                      <span className="flex items-center gap-1 rounded bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-sky-400">
-                        <CalendarDays className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1">
+                        <CalendarDays className="h-3.5 w-3.5" />
                         {formatDueDate(task.dueAt)}
                       </span>
                     )}
-                    <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-slate-500">
-                      {lists.find((todoList) => todoList.id === task.listId)?.title || '未分组'}
-                    </span>
-                    {task.isPending && (
-                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-amber-500">
-                        待同步
-                      </span>
-                    )}
+                    {task.tag && <span className="rounded-md border border-white/10 px-2 py-1">{task.tag}</span>}
+                    {task.isPending && <span className="text-amber-300">待同步</span>}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-white/5 px-6 py-16 text-center">
-            <WandSparkles className="mb-3 h-8 w-8 text-slate-700" />
-            <p className="text-sm font-bold text-slate-300">当前筛选下没有任务</p>
-            <p className="mt-2 max-w-[220px] text-[11px] leading-relaxed text-slate-500">
-              可以切换清单、分类或状态筛选，也可以直接新建一条任务。
-            </p>
+          <div className="rounded-lg border border-dashed border-white/10 bg-[#16181c] px-4 py-10 text-center">
+            <ClipboardList className="mx-auto mb-3 h-6 w-6 text-slate-600" />
+            <p className="text-sm font-medium text-white">当前筛选下没有任务</p>
+            <p className="mt-2 text-sm text-slate-400">调整筛选，或者直接新建一条任务。</p>
+            <button
+              onClick={onOpenNewTask}
+              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/10 px-3 text-sm text-slate-200 transition-colors hover:bg-white/5"
+            >
+              <Plus className="h-4 w-4" />
+              新建任务
+            </button>
           </div>
         )}
-      </div>
-
-      {!isBatchMode && (
-        <button
-          onClick={onOpenNewTask}
-          className="fixed bottom-24 right-6 z-30 flex h-16 w-16 items-center justify-center rounded-[24px] bg-emerald-500 text-black shadow-lg shadow-emerald-500/20 transition-transform active:scale-90"
-        >
-          <Plus className="h-8 w-8" />
-        </button>
-      )}
-    </>
+      </section>
+    </div>
   );
 };

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Square, CheckSquare2 } from 'lucide-react';
+import { CalendarDays, CheckSquare2, ChevronLeft, ChevronRight, ClipboardList, Square } from 'lucide-react';
 import { TodoItem, TodoList } from '../../../types/api';
 import {
   addMonths,
@@ -86,48 +85,58 @@ export const CalendarTab: React.FC<CalendarTabProps> = ({ items, lists, onTaskPr
   const monthGrid = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="grid grid-cols-3 gap-3">
-        <div className="rounded-[24px] border border-white/5 bg-white/5 p-4">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">今日</div>
-          <div className="mt-2 text-2xl font-bold text-white">{todayCount}</div>
-          <div className="mt-1 text-[10px] text-slate-500">今天到期的任务</div>
-        </div>
-        <div className="rounded-[24px] border border-white/5 bg-white/5 p-4">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">逾期</div>
-          <div className="mt-2 text-2xl font-bold text-rose-400">{overdueCount}</div>
-          <div className="mt-1 text-[10px] text-slate-500">未完成且已过期</div>
-        </div>
-        <div className="rounded-[24px] border border-white/5 bg-white/5 p-4">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">待安排</div>
-          <div className="mt-2 text-2xl font-bold text-sky-400">{unscheduledCount}</div>
-          <div className="mt-1 text-[10px] text-slate-500">还没设日期的任务</div>
+    <div className="space-y-4 pb-6">
+      <section className="rounded-lg border border-white/10 bg-[#181b1f] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div>
+            <div className="text-xs text-slate-500">今日</div>
+            <div className="mt-1 text-sm font-medium text-white">{todayCount} 项任务</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">逾期</div>
+            <div className="mt-1 text-sm font-medium text-rose-300">{overdueCount} 项未完成</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">未安排</div>
+            <div className="mt-1 text-sm font-medium text-slate-200">{unscheduledCount} 项待定</div>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-white/5 bg-white/5 p-5">
-        <div className="mb-5 flex items-center justify-between">
-          <button
-            onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
-            className="rounded-xl border border-white/5 bg-white/5 p-2 text-slate-400 transition-colors hover:text-white"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div className="text-center">
-            <div className="text-sm font-bold text-white">{formatMonthLabel(visibleMonth)}</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Calendar View</div>
+      <section className="rounded-lg border border-white/10 bg-[#181b1f] p-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-semibold text-white">{formatMonthLabel(visibleMonth)}</div>
+            <div className="mt-1 text-sm text-slate-400">按日期查看任务安排</div>
           </div>
-          <button
-            onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
-            className="rounded-xl border border-white/5 bg-white/5 p-2 text-slate-400 transition-colors hover:text-white"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setVisibleMonth(startOfMonth(new Date()));
+                setSelectedDateKey(todayKey);
+              }}
+              className="inline-flex h-9 items-center rounded-md border border-white/10 px-3 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              今天
+            </button>
+            <button
+              onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-[#111315] text-slate-300 transition-colors hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-[#111315] text-slate-300 transition-colors hover:text-white"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="mb-2 grid grid-cols-7 gap-2">
           {WEEKDAY_LABELS.map((label) => (
-            <div key={label} className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <div key={label} className="text-center text-xs text-slate-500">
               {label}
             </div>
           ))}
@@ -140,32 +149,34 @@ export const CalendarTab: React.FC<CalendarTabProps> = ({ items, lists, onTaskPr
             const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
             const isSelected = dateKey === selectedDateKey;
             const isToday = dateKey === todayKey;
-            const completedCount = dayTasks.filter((task) => task.completed).length;
 
             return (
               <button
                 key={dateKey}
                 onClick={() => setSelectedDateKey(dateKey)}
-                className={`min-h-16 rounded-2xl border p-2 text-left transition-all ${
+                className={`min-h-16 rounded-lg border p-2 text-left transition-colors ${
                   isSelected
-                    ? 'border-emerald-500/30 bg-emerald-500/10'
+                    ? 'border-emerald-400/40 bg-emerald-500/10'
                     : isCurrentMonth
-                      ? 'border-white/5 bg-white/[0.03] hover:bg-white/10'
+                      ? 'border-white/10 bg-[#111315] hover:border-white/20'
                       : 'border-transparent bg-transparent text-slate-700'
                 }`}
               >
-                <div className={`text-xs font-bold ${isToday ? 'text-emerald-400' : isCurrentMonth ? 'text-white' : 'text-slate-700'}`}>
-                  {date.getDate()}
+                <div className="flex items-center justify-between gap-2">
+                  <div className={`text-xs font-bold ${isToday ? 'text-emerald-400' : isCurrentMonth ? 'text-white' : 'text-slate-700'}`}>
+                    {date.getDate()}
+                  </div>
+                  {dayTasks.length > 0 && <span className="text-[10px] text-slate-400">{dayTasks.length}</span>}
                 </div>
                 {dayTasks.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <div className="text-[9px] font-bold text-slate-300">{dayTasks.length} 项</div>
-                    <div className="h-1.5 rounded-full bg-white/5">
-                      <div
-                        className="h-1.5 rounded-full bg-emerald-500"
-                        style={{ width: `${(completedCount / dayTasks.length) * 100}%` }}
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {dayTasks.slice(0, 3).map((task) => (
+                      <span
+                        key={task.id}
+                        className={`h-1.5 w-1.5 rounded-full ${task.completed ? 'bg-slate-600' : 'bg-emerald-400'}`}
                       />
-                    </div>
+                    ))}
+                    {dayTasks.length > 3 && <span className="text-[10px] text-slate-500">+{dayTasks.length - 3}</span>}
                   </div>
                 )}
               </button>
@@ -177,22 +188,21 @@ export const CalendarTab: React.FC<CalendarTabProps> = ({ items, lists, onTaskPr
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-bold text-white">{formatDateKeyLabel(selectedDateKey)}</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">当日任务</div>
+            <div className="text-base font-semibold text-white">{formatDateKeyLabel(selectedDateKey)}</div>
+            <div className="text-sm text-slate-400">当天任务</div>
           </div>
-          <div className="rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+          <div className="rounded-md border border-white/10 bg-[#181b1f] px-3 py-1.5 text-xs text-slate-300">
             {selectedDayTasks.length} 条
           </div>
         </div>
 
         {selectedDayTasks.length > 0 ? (
           selectedDayTasks.map((task) => (
-            <motion.div
+            <div
               key={task.id}
-              layout
               onClick={() => onTaskPress(task)}
-              className={`flex cursor-pointer items-center gap-4 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
-                task.completed ? 'border-transparent bg-white/[0.02] opacity-60' : 'border-white/5 bg-white/5 hover:border-white/10'
+              className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition-colors ${
+                task.completed ? 'border-white/5 bg-[#15181c] opacity-70' : 'border-white/10 bg-[#181b1f] hover:border-white/20'
               }`}
             >
               <button
@@ -200,44 +210,36 @@ export const CalendarTab: React.FC<CalendarTabProps> = ({ items, lists, onTaskPr
                   event.stopPropagation();
                   onToggleTaskCompletion(task);
                 }}
-                className="flex h-6 w-6 items-center justify-center"
+                className="flex h-5 w-5 items-center justify-center"
               >
                 {task.completed ? (
-                  <CheckSquare2 className="h-5 w-5 text-emerald-500" />
+                  <CheckSquare2 className="h-5 w-5 text-emerald-400" />
                 ) : (
                   <Square className="h-5 w-5 text-slate-500" />
                 )}
               </button>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 space-y-2">
                 <div className={`truncate text-sm font-medium text-white ${task.completed ? 'line-through text-slate-500' : ''}`}>
                   {task.title}
                 </div>
-                <div className="mt-1.5 flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-[10px] font-mono text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1">
                     <CalendarDays className="h-3 w-3" />
                     {formatDueDate(task.dueAt)}
                   </span>
-                  {task.tag && (
-                    <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-emerald-400">
-                      {task.tag}
-                    </span>
-                  )}
-                  <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tighter text-slate-500">
+                  {task.tag && <span className="rounded-md border border-white/10 px-2 py-1">{task.tag}</span>}
+                  <span className="rounded-md border border-white/10 px-2 py-1">
                     {lists.find((todoList) => todoList.id === task.listId)?.title || '未分组'}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-[10px] font-mono text-slate-500">
-                <Clock3 className="h-3.5 w-3.5" />
-                {task.completed ? '已完成' : '待办'}
-              </div>
-            </motion.div>
+            </div>
           ))
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-white/5 px-6 py-14 text-center">
-            <Check className="mb-3 h-8 w-8 text-slate-700" />
-            <p className="text-sm font-bold text-slate-300">这一天还没有安排任务</p>
-            <p className="mt-2 max-w-[220px] text-[11px] leading-relaxed text-slate-500">
+          <div className="rounded-lg border border-dashed border-white/10 bg-[#16181c] px-4 py-10 text-center">
+            <ClipboardList className="mx-auto mb-3 h-6 w-6 text-slate-600" />
+            <p className="text-sm font-medium text-white">这一天还没有安排任务</p>
+            <p className="mt-2 text-sm text-slate-400">
               可以去任务页编辑任务，为它设置一个截止日期，日历这里就会自动出现。
             </p>
           </div>

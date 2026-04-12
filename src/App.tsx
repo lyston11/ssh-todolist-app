@@ -5,6 +5,7 @@ import { ConnectionProvider, useConnection } from './state/ConnectionContext';
 import { TodoProvider } from './state/TodoContext';
 import { Terminal } from 'lucide-react';
 import { nativeBridge } from './lib/bridge';
+import { hasImportConfigInUrl, stripSensitiveImportParams } from './lib/import_config';
 
 // Feature Components (to be created)
 import { WelcomeView } from './features/connection/WelcomeView';
@@ -102,6 +103,18 @@ const AppContent: React.FC = () => {
     let disposed = false;
     let listenerHandle: { remove: () => Promise<void> } | null = null;
 
+    if (typeof window !== 'undefined') {
+      const currentUrl = window.location.href;
+      if (hasImportConfigInUrl(currentUrl)) {
+        void handleIncomingImport(currentUrl).finally(() => {
+          const sanitizedUrl = stripSensitiveImportParams(currentUrl);
+          if (sanitizedUrl !== currentUrl && typeof window.history.replaceState === 'function') {
+            window.history.replaceState({}, '', sanitizedUrl);
+          }
+        });
+      }
+    }
+
     nativeBridge.getLaunchUrl().then((url) => {
       if (!disposed) {
         void handleIncomingImport(url);
@@ -128,27 +141,26 @@ const AppContent: React.FC = () => {
 
   if (stage === 'splash') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121212]">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <Terminal className="w-16 h-16 text-emerald-500" />
-            <motion.div animate={{ opacity: [0, 1, 0] }} transition={{ duration: 1, repeat: Infinity }} className="absolute -right-2 bottom-2 w-3 h-6 bg-emerald-500" />
+      <div className="flex min-h-screen items-center justify-center bg-[#111315] p-6">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-white/10 bg-[#181b1f] text-emerald-400">
+            <Terminal className="h-6 w-6" />
           </div>
-          <p className="text-xs font-mono tracking-widest text-slate-500 uppercase">Initializing secure tunnel...</p>
+          <div className="text-sm text-slate-400">正在启动 SSH Todo…</div>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] text-slate-300 font-sans selection:bg-emerald-500/30 overflow-hidden flex flex-col">
+    <div className="flex min-h-screen flex-col overflow-hidden bg-[#111315] font-sans text-slate-300 selection:bg-emerald-500/30">
       <AnimatePresence>
         {globalNotice && (
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            className={`fixed left-1/2 top-4 z-[70] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur-xl ${
+            className={`fixed left-1/2 top-4 z-[70] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-lg border px-4 py-3 text-sm ${
               globalNotice.kind === 'success'
                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                 : 'border-rose-500/30 bg-rose-500/10 text-rose-200'

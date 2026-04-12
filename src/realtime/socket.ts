@@ -1,7 +1,7 @@
-import { SnapshotResponse } from '../types/api';
+import type { SnapshotResponse } from '../types/api.ts';
 
 export type SocketEvent = 'open' | 'close' | 'error' | 'message';
-type SocketStatus = 'connected' | 'disconnected' | 'reconnecting' | 'error';
+export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 export class RealtimeSocket {
   private socket: WebSocket | null = null;

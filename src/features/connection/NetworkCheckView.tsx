@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, RefreshCw, Wifi, ShieldCheck, Globe, Server, ArrowRight, Search } from 'lucide-react';
+import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { useConnection } from '../../state/ConnectionContext';
 import { isLocalNode } from '../../lib/nodes';
 import { nativeBridge, NetworkInfo } from '../../lib/bridge';
@@ -17,12 +17,15 @@ export const NetworkCheckView: React.FC<NetworkCheckViewProps> = ({ onBack, onSe
 
   const detect = async () => {
     setIsDetecting(true);
-    const info = await nativeBridge.getNetworkInfo();
-    setNetworkInfo(info);
-    if (status === 'online' && activeNode && !isLocalNode(activeNode)) {
-      await fetchCandidates();
+    try {
+      const info = await nativeBridge.getNetworkInfo();
+      setNetworkInfo(info);
+      if (status === 'online' && activeNode && !isLocalNode(activeNode)) {
+        await fetchCandidates();
+      }
+    } finally {
+      setIsDetecting(false);
     }
-    setIsDetecting(false);
   };
 
   useEffect(() => {
@@ -30,107 +33,112 @@ export const NetworkCheckView: React.FC<NetworkCheckViewProps> = ({ onBack, onSe
   }, [activeNode, status]);
 
   const canShowServiceCandidates = Boolean(activeNode && !isLocalNode(activeNode) && status === 'online');
-  const candidatesTitle = canShowServiceCandidates ? '当前服务返回的候选连接地址' : '候选连接地址';
   const candidatesHint = canShowServiceCandidates
-    ? '这些地址来自当前已连接服务的 /api/meta，可用于同一服务的其他设备导入。'
+    ? '这些地址来自当前已连接服务的 /api/meta。点任一地址后，会自动带入节点设置页。'
     : isLocalNode(activeNode)
-      ? '当前处于本地模式，没有连接远程服务，所以无法拉取服务端候选地址。'
-      : '尚未连接远程服务，无法拉取服务端候选地址。';
+      ? '当前处于本地模式，还没有连接远程服务，所以拿不到服务端候选地址。'
+      : '先连接任意一个远程服务，之后这里才能看到服务端返回的候选地址。';
 
   return (
-    <motion.div key="network-check" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="flex-1 flex flex-col max-w-md mx-auto w-full">
-      <header className="p-6 flex items-center justify-between border-b border-white/5 bg-[#121212]/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 -ml-2 hover:bg-white/5 rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-          <h1 className="text-lg font-semibold text-white tracking-tight">网络诊断与接入</h1>
-        </div>
-        <button onClick={detect} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors">
-          <RefreshCw className={`w-4 h-4 ${isDetecting ? 'animate-spin' : ''}`} />
-        </button>
-      </header>
-
-      <main className="flex-1 p-6 space-y-8 overflow-y-auto pb-40">
-        <section className="space-y-4">
-          <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest ml-1">本机环境 (Local Environment)</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-2">
-              <Wifi className="w-4 h-4 text-emerald-500" />
-              <div className="text-[10px] text-slate-500 uppercase font-mono">Wi-Fi Status</div>
-              <div className="text-sm font-bold text-white">{networkInfo?.wifi || 'Detecting...'}</div>
-            </div>
-            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <div className="text-[10px] text-slate-500 uppercase font-mono">Tailscale</div>
-              <div className="text-sm font-bold text-white">{networkInfo?.tailscale || 'Detecting...'}</div>
+    <motion.div
+      key="network-check"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="mx-auto flex w-full max-w-[520px] flex-1 flex-col"
+    >
+      <header className="border-b border-white/10 bg-[#111315] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onBack}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h1 className="text-base font-semibold text-white">网络诊断</h1>
+              <p className="mt-1 text-sm text-slate-400">查看当前设备的网络信息，以及服务端提供的候选地址。</p>
             </div>
           </div>
-          <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Globe className="w-4 h-4 text-emerald-500" />
-              <div>
-                <div className="text-[10px] text-slate-500 uppercase font-mono">My Tailscale IP</div>
-                <div className="text-sm font-bold text-white font-mono">{networkInfo?.localIp || '...'}</div>
-              </div>
+          <button
+            onClick={detect}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${isDetecting ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto px-4 py-4 pb-24">
+        <section className="rounded-xl border border-white/10 bg-[#181b1f] p-4">
+          <div>
+            <h2 className="text-sm font-medium text-white">本机网络信息</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              Web 环境下无法完全读取本机 Tailscale 信息，Android 原生应用里会显示更完整的结果。
+            </p>
+          </div>
+
+          <div className="mt-4 divide-y divide-white/10 rounded-lg border border-white/10 bg-[#111315]">
+            <div className="flex items-start justify-between gap-4 px-4 py-3">
+              <div className="text-sm text-slate-400">局域网接口</div>
+              <div className="max-w-[60%] text-right text-sm text-white">{networkInfo?.wifi || '读取中…'}</div>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-4 py-3">
+              <div className="text-sm text-slate-400">Tailscale</div>
+              <div className="max-w-[60%] text-right text-sm text-white">{networkInfo?.tailscale || '读取中…'}</div>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-4 py-3">
+              <div className="text-sm text-slate-400">本机地址</div>
+              <div className="max-w-[60%] text-right text-sm text-white">{networkInfo?.localIp || '读取中…'}</div>
             </div>
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">{candidatesTitle}</div>
-            {isDetecting && <span className="text-[10px] font-mono text-emerald-500/50">Scanning...</span>}
+        <section className="mt-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-medium text-white">候选连接地址</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">{candidatesHint}</p>
           </div>
-          <p className="px-1 text-[11px] leading-relaxed text-slate-500">{candidatesHint}</p>
-          
-          <div className="space-y-3">
-            {canShowServiceCandidates && candidates.length > 0 ? candidates.map((node) => (
-              <motion.div 
-                key={node.id}
-                onClick={() => onSelect(node.serverUrl)}
-                className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between group transition-colors hover:border-emerald-500/30 cursor-pointer"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`p-2.5 rounded-xl ${
-                    node.status === 'connectable'
-                      ? 'bg-emerald-500/10 text-emerald-500'
-                      : node.status === 'needs-token'
-                        ? 'bg-amber-500/10 text-amber-500'
-                        : 'bg-slate-500/10 text-slate-500'
-                  }`}>
-                    <Server className="w-5 h-5" />
+
+          {canShowServiceCandidates && candidates.length > 0 ? (
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-[#181b1f] divide-y divide-white/10">
+              {candidates.map((node) => (
+                <button
+                  key={node.id}
+                  onClick={() => onSelect(node.serverUrl)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-white">{node.name}</div>
+                    <div className="mt-1 truncate text-xs text-slate-400">{node.serverUrl}</div>
+                    <div className="mt-1 truncate text-xs text-slate-500">{node.wsUrl}</div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {node.kind} · {node.source}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-bold text-white">{node.name}</div>
-                    <div className="text-[10px] font-mono text-slate-500">{node.serverUrl}</div>
-                    <div className="mt-1 text-[10px] font-mono text-slate-600">{node.wsUrl}</div>
-                    <div className="mt-1 text-[9px] uppercase tracking-widest text-slate-600">{node.kind} · {node.source}</div>
+                  <div className="shrink-0 text-right">
+                    <div
+                      className={`text-xs ${
+                        node.status === 'connectable'
+                          ? 'text-emerald-300'
+                          : node.status === 'needs-token'
+                            ? 'text-amber-300'
+                            : 'text-slate-400'
+                      }`}
+                    >
+                      {node.status === 'connectable' ? '可连接' : node.status === 'needs-token' ? '需要 token' : '不可达'}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">带入地址</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-[9px] font-bold uppercase tracking-widest ${
-                      node.status === 'connectable'
-                        ? 'text-emerald-500'
-                        : node.status === 'needs-token'
-                          ? 'text-amber-500'
-                          : 'text-slate-500'
-                    }`}
-                  >
-                    {node.status === 'connectable' ? '可连接' : node.status === 'needs-token' ? '需令牌' : '不可达'}
-                  </span>
-                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-500 transition-colors" />
-                </div>
-              </motion.div>
-            )) : (
-              <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl flex flex-col items-center text-center gap-3">
-                <Search className="w-6 h-6 text-slate-600" />
-                <p className="text-sm font-medium text-slate-400">
-                  {canShowServiceCandidates ? '当前服务没有返回候选地址' : '暂时无法拉取候选地址'}
-                </p>
-                <p className="text-[10px] text-slate-600 leading-relaxed max-w-[220px]">{candidatesHint}</p>
-              </div>
-            )}
-          </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/10 bg-[#16181c] px-4 py-8 text-center text-sm text-slate-400">
+              {canShowServiceCandidates ? '当前服务没有返回候选地址。' : '当前还不能拉取候选地址。'}
+            </div>
+          )}
         </section>
       </main>
     </motion.div>

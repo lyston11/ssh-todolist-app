@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { Trash2 } from 'lucide-react';
+import { BottomSheet } from '../../../components/BottomSheet';
 import { TodoItem, TodoList } from '../../../types/api';
 import { parseDateInputToTimestamp, toDateInputValue } from '../lib/dates';
 import { TaskEditorDraft } from '../hooks/useTaskEditor';
@@ -45,22 +45,6 @@ export const TaskEditorSheet: React.FC<TaskEditorSheetProps> = ({
   }, [defaultListId, defaultTaskTag, editingTask, open]);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousRootOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousRootOverflow;
-    };
-  }, [open]);
-
-  useEffect(() => {
     if (!open || !lists.length) {
       return;
     }
@@ -82,116 +66,101 @@ export const TaskEditorSheet: React.FC<TaskEditorSheetProps> = ({
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={editingTask ? '编辑任务' : '新建任务'}
+      description="填写标题、清单、分类和日期。"
+    >
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white">任务内容</label>
+          <input
+            autoFocus
+            value={taskInput}
+            onChange={(event) => setTaskInput(event.target.value)}
+            placeholder="今天要做什么？"
+            className="h-12 w-full rounded-lg border border-white/10 bg-[#1d2126] px-4 text-base text-white outline-none transition-colors placeholder:text-slate-500 focus:border-emerald-400/50"
           />
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 z-50 mx-auto w-full max-w-md rounded-t-[32px] border-t border-white/10 bg-[#1A1A1A] p-8"
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white">任务分类</label>
+          <div className="flex flex-wrap gap-2">
+            {availableTaskTags.map((tag) => (
+              <button
+                type="button"
+                key={tag}
+                onClick={() => setTaskTagInput(tag)}
+                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                  taskTagInput === tag
+                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+                    : 'border-white/10 text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white">所属清单</label>
+          <div className="flex flex-wrap gap-2">
+            {lists.map((todoList) => (
+              <button
+                type="button"
+                key={todoList.id}
+                onClick={() => setTaskListId(todoList.id)}
+                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                  taskListId === todoList.id
+                    ? 'border-white/20 bg-white/10 text-white'
+                    : 'border-white/10 text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                {todoList.title}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-white">截止日期</label>
+            {taskDueDateInput && (
+              <button
+                type="button"
+                onClick={() => setTaskDueDateInput('')}
+                className="text-sm text-slate-400 transition-colors hover:text-rose-300"
+              >
+                清空
+              </button>
+            )}
+          </div>
+          <input
+            type="date"
+            value={taskDueDateInput}
+            onChange={(event) => setTaskDueDateInput(event.target.value)}
+            className="h-12 w-full rounded-lg border border-white/10 bg-[#1d2126] px-4 text-sm text-white outline-none transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+          />
+        </div>
+        <div className="flex gap-3 pt-2">
+          {editingTask && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-rose-400/20 px-4 text-rose-300 transition-colors hover:bg-rose-500/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!taskInput.trim()}
+            className="h-10 flex-1 rounded-md bg-emerald-500 text-sm font-medium text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/40 disabled:text-black/60"
           >
-            <div className="mx-auto mb-8 h-1.5 w-12 rounded-full bg-white/10" />
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">任务内容</label>
-                <input
-                  autoFocus
-                  value={taskInput}
-                  onChange={(event) => setTaskInput(event.target.value)}
-                  placeholder="今天要做什么？"
-                  className="h-16 w-full rounded-2xl border border-white/10 bg-white/5 px-6 text-lg text-white outline-none transition-all placeholder:text-slate-600 focus:border-emerald-500/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">任务分类</label>
-                <div className="flex flex-wrap gap-2">
-                  {availableTaskTags.map((tag) => (
-                    <button
-                      type="button"
-                      key={tag}
-                      onClick={() => setTaskTagInput(tag)}
-                      className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                        taskTagInput === tag
-                          ? 'bg-emerald-500 text-black'
-                          : 'border border-white/5 bg-white/5 text-slate-500'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">所属清单</label>
-                <div className="flex flex-wrap gap-2">
-                  {lists.map((todoList) => (
-                    <button
-                      type="button"
-                      key={todoList.id}
-                      onClick={() => setTaskListId(todoList.id)}
-                      className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                        taskListId === todoList.id
-                          ? 'bg-white text-black'
-                          : 'border border-white/5 bg-white/5 text-slate-500'
-                      }`}
-                    >
-                      {todoList.title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">截止日期</label>
-                  {taskDueDateInput && (
-                    <button
-                      type="button"
-                      onClick={() => setTaskDueDateInput('')}
-                      className="text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:text-rose-400"
-                    >
-                      清空
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="date"
-                  value={taskDueDateInput}
-                  onChange={(event) => setTaskDueDateInput(event.target.value)}
-                  className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition-all [&::-webkit-calendar-picker-indicator]:invert"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                {editingTask && (
-                  <button
-                    type="button"
-                    onClick={onDelete}
-                    className="h-14 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 text-rose-500"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!taskInput.trim()}
-                  className="h-14 flex-1 rounded-2xl bg-emerald-500 font-bold text-black shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:bg-emerald-500/40 disabled:text-black/60 disabled:shadow-none"
-                >
-                  保存任务
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            保存任务
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
   );
 };

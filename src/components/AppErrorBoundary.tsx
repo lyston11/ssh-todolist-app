@@ -27,16 +27,15 @@ export class AppErrorBoundary extends React.Component<React.PropsWithChildren, A
     }
 
     return (
-      <div className="min-h-screen bg-[#121212] text-slate-200 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-[28px] border border-rose-500/20 bg-white/5 p-6">
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-rose-400">应用异常</div>
-          <h1 className="mt-3 text-xl font-semibold text-white">界面渲染失败</h1>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">
+      <div className="flex min-h-screen items-center justify-center bg-[#111315] p-6 text-slate-200">
+        <div className="w-full max-w-md rounded-lg border border-white/10 bg-[#181b1f] p-5">
+          <div className="text-sm font-medium text-rose-300">界面渲染失败</div>
+          <p className="mt-3 text-sm leading-6 text-slate-400">
             当前页面遇到了未处理错误。你可以刷新应用后继续使用，已保存的本地数据不会因此被清空。
           </p>
           <button
             onClick={this.handleReload}
-            className="mt-6 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400"
+            className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-md bg-emerald-500 px-4 text-sm font-medium text-black transition-colors hover:bg-emerald-400"
           >
             重新加载应用
           </button>

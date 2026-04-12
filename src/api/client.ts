@@ -14,6 +14,10 @@ interface TodoCollectionResponse {
   time: number;
 }
 
+interface ClearCompletedResponse {
+  deleted: number;
+}
+
 export class ApiClient {
   private baseUrl: string = '';
   private token: string | null = null;
@@ -163,9 +167,10 @@ export class ApiClient {
     });
   }
 
-  async clearCompleted(): Promise<void> {
-    return this.request<void>('/api/todos/clear-completed', {
-      method: 'POST'
+  async clearCompleted(listId?: string): Promise<ClearCompletedResponse> {
+    return this.request<ClearCompletedResponse>('/api/todos/clear-completed', {
+      method: 'POST',
+      body: JSON.stringify(listId ? { listId } : {})
     });
   }
 }

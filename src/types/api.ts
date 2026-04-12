@@ -86,6 +86,7 @@ export type PendingActionData =
   | Partial<TodoItem>
   | TodoList
   | { title: string }
+  | { listId?: string }
   | undefined;
 
 export interface PendingAction {

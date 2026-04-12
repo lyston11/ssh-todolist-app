@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Globe, ShieldCheck, QrCode, Clipboard, Activity, Check, RefreshCw } from 'lucide-react';
-import { normalizeServerUrl } from '../../lib/connection';
+import { AnimatePresence, motion } from 'motion/react';
+import { ChevronLeft, Clipboard, Globe, QrCode, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useConnection } from '../../state/ConnectionContext';
 import { nativeBridge } from '../../lib/bridge';
 
@@ -11,184 +10,256 @@ interface NodeSettingsViewProps {
   prefillAddress?: string;
 }
 
+interface FeedbackState {
+  kind: 'success' | 'error';
+  text: string;
+}
+
 export const NodeSettingsView: React.FC<NodeSettingsViewProps> = ({ onBack, onFinish, prefillAddress }) => {
   const { connect, testConnection, importConfig } = useConnection();
   const [nodeAddress, setNodeAddress] = useState('');
   const [nodeToken, setNodeToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'none' | 'success' | 'error'>('none');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   useEffect(() => {
     if (prefillAddress?.trim()) {
       setNodeAddress(prefillAddress.trim());
-      setTestResult('none');
+      setFeedback(null);
     }
   }, [prefillAddress]);
 
   const handleTest = async () => {
-    if (!nodeAddress) return;
+    if (!nodeAddress.trim()) {
+      return;
+    }
+
     setIsTesting(true);
-    setTestResult('none');
+    setFeedback(null);
     try {
-      const success = await testConnection(normalizeServerUrl(nodeAddress), nodeToken);
-      setTestResult(success ? 'success' : 'error');
-    } catch {
-      setTestResult('error');
+      const success = await testConnection(nodeAddress, nodeToken);
+      setFeedback({
+        kind: success ? 'success' : 'error',
+        text: success ? '连接测试通过，节点可以访问。' : '连接测试失败，请检查地址或 token。',
+      });
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '连接测试失败，请检查地址或 token。',
+      });
     } finally {
       setIsTesting(false);
     }
   };
 
   const handleConnect = async () => {
-    if (!nodeAddress) return;
+    if (!nodeAddress.trim()) {
+      return;
+    }
+
     setIsConnecting(true);
+    setFeedback(null);
     try {
       await connect(nodeAddress, nodeToken);
       onFinish();
-    } catch (err) {
-      setTestResult('error');
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '连接失败，请检查地址或 token。',
+      });
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handlePasteConfig = async () => {
+    setFeedback(null);
     try {
+      setIsConnecting(true);
       const text = await navigator.clipboard.readText();
-      if (text) {
-        setIsConnecting(true);
-        await importConfig(text);
-        onFinish();
+      if (!text.trim()) {
+        throw new Error('剪贴板里没有可用的配置内容。');
       }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '导入失败');
+      await importConfig(text);
+      onFinish();
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '粘贴配置失败。',
+      });
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handleScanConfig = async () => {
+    setFeedback(null);
     try {
       setIsConnecting(true);
       const text = await nativeBridge.scanQrCode();
-      if (!text) {
-        throw new Error('未读取到二维码内容');
+      if (!text.trim()) {
+        throw new Error('未读取到二维码内容。');
       }
       await importConfig(text);
       onFinish();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '扫码导入失败');
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '扫码导入失败。',
+      });
     } finally {
       setIsConnecting(false);
     }
   };
 
   return (
-    <motion.div key="node-settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="flex-1 flex flex-col max-w-md mx-auto w-full">
-      <header className="p-6 flex items-center justify-between border-b border-white/5 bg-[#121212]/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 -ml-2 hover:bg-white/5 rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-          <h1 className="text-lg font-semibold text-white tracking-tight">节点连接设置</h1>
+    <motion.div
+      key="node-settings"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="mx-auto flex w-full max-w-[520px] flex-1 flex-col"
+    >
+      <header className="border-b border-white/10 bg-[#111315] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-base font-semibold text-white">节点连接设置</h1>
+            <p className="mt-1 text-sm text-slate-400">手动填写地址和 token，或者直接导入配置。</p>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-8 overflow-y-auto pb-40">
-        <div className="p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-3xl flex items-center gap-4 relative overflow-hidden group">
-          <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-500 relative z-10"><Globe className="w-6 h-6" /></div>
-          <div className="relative z-10">
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-0.5">Target Infrastructure</div>
-            <div className="text-base font-bold text-white font-mono">{nodeAddress || '待配置新节点'}</div>
+      <main className="flex-1 overflow-y-auto px-4 py-4 pb-24">
+        <section className="space-y-4 rounded-xl border border-white/10 bg-[#181b1f] p-4">
+          <div>
+            <h2 className="text-sm font-medium text-white">连接信息</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">支持直接填写 Tailscale IP 或 MagicDNS 地址。未写协议时会自动补全。</p>
           </div>
-        </div>
 
-        <div className="space-y-3">
-          <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest px-1">节点地址 (Address)</label>
-          <div className="relative group">
-            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
-            <input 
-              type="text" 
-              value={nodeAddress}
-              onChange={(e) => { setNodeAddress(e.target.value); setTestResult('none'); }}
-              placeholder="100.x.x.x 或 nas.tail-net.ts.net"
-              className="w-full h-16 bg-white/5 border border-white/10 focus:border-emerald-500/50 focus:bg-emerald-500/5 rounded-2xl pl-12 pr-4 text-sm font-mono text-white placeholder:text-slate-600 outline-none transition-all"
-            />
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white">节点地址</label>
+            <div className="relative">
+              <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={nodeAddress}
+                onChange={(event) => {
+                  setNodeAddress(event.target.value);
+                  setFeedback(null);
+                }}
+                placeholder="例如 100.x.x.x 或 my-mac.tailnet.ts.net"
+                className="h-11 w-full rounded-md border border-white/10 bg-[#111315] pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-emerald-400/40"
+              />
+            </div>
+            {prefillAddress?.trim() && (
+              <p className="text-xs text-slate-500">已从候选地址带入当前节点。</p>
+            )}
           </div>
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">访问令牌 (Secure Token)</label>
-            <button onClick={() => setShowToken(!showToken)} className="text-[10px] font-mono text-emerald-500/50 hover:text-emerald-500 transition-colors">
-              {showToken ? '隐藏' : '显示'}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-white">访问 token</label>
+              <button
+                type="button"
+                onClick={() => setShowToken((current) => !current)}
+                className="text-xs text-slate-400 transition-colors hover:text-white"
+              >
+                {showToken ? '隐藏' : '显示'}
+              </button>
+            </div>
+            <div className="relative">
+              <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={nodeToken}
+                onChange={(event) => {
+                  setNodeToken(event.target.value);
+                  setFeedback(null);
+                }}
+                placeholder="例如 mytodo-2026"
+                className="h-11 w-full rounded-md border border-white/10 bg-[#111315] pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-emerald-400/40"
+              />
+            </div>
+            <p className="text-xs text-slate-500">如果服务端开启鉴权，再填写 token。token 可以保持简短易输。</p>
+          </div>
+        </section>
+
+        <section className="mt-4 space-y-3 rounded-xl border border-white/10 bg-[#181b1f] p-4">
+          <div>
+            <h2 className="text-sm font-medium text-white">快捷导入</h2>
+            <p className="mt-1 text-sm text-slate-400">支持扫码或读取剪贴板中的导入链接、config64 和配置文本。</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              onClick={handleScanConfig}
+              disabled={isConnecting}
+              className="flex items-center gap-3 rounded-md border border-white/10 bg-[#111315] px-4 py-3 text-left transition-colors hover:bg-white/5 disabled:opacity-50"
+            >
+              <QrCode className="h-4 w-4 text-emerald-400" />
+              <div>
+                <div className="text-sm font-medium text-white">扫码导入</div>
+                <div className="text-xs text-slate-400">从服务端配置页直接扫码</div>
+              </div>
+            </button>
+            <button
+              onClick={handlePasteConfig}
+              disabled={isConnecting}
+              className="flex items-center gap-3 rounded-md border border-white/10 bg-[#111315] px-4 py-3 text-left transition-colors hover:bg-white/5 disabled:opacity-50"
+            >
+              <Clipboard className="h-4 w-4 text-emerald-400" />
+              <div>
+                <div className="text-sm font-medium text-white">粘贴配置</div>
+                <div className="text-xs text-slate-400">读取剪贴板中的导入内容</div>
+              </div>
             </button>
           </div>
-          <div className="relative group">
-            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
-            <input 
-              type={showToken ? 'text' : 'password'} 
-              value={nodeToken}
-              onChange={(e) => { setNodeToken(e.target.value); setTestResult('none'); }}
-              placeholder="SSH_TODO_TOKEN_••••••••"
-              className="w-full h-16 bg-white/5 border border-white/10 focus:border-emerald-500/50 focus:bg-emerald-500/5 rounded-2xl pl-12 pr-12 text-sm font-mono text-white placeholder:text-slate-600 outline-none transition-all"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={handleScanConfig}
-            className="p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-medium flex flex-col items-start gap-3 transition-all active:scale-95"
-          >
-            <div className="p-2 bg-white/5 rounded-lg text-slate-400"><QrCode className="w-4 h-4" /></div>
-            <span>扫码导入</span>
-          </button>
-          <button 
-            onClick={handlePasteConfig}
-            className="p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-medium flex flex-col items-start gap-3 transition-all active:scale-95"
-          >
-            <div className="p-2 bg-white/5 rounded-lg text-slate-400"><Clipboard className="w-4 h-4" /></div>
-            <span>粘贴配置</span>
-          </button>
-        </div>
+        </section>
 
         <AnimatePresence>
-          {testResult !== 'none' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} 
-              className={`p-5 rounded-3xl border flex items-start gap-4 ${testResult === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/10 border-rose-500/20 text-rose-500'}`}
+          {feedback && (
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+                feedback.kind === 'success'
+                  ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200'
+                  : 'border-rose-500/20 bg-rose-500/5 text-rose-200'
+              }`}
             >
-              <div className={`p-2 rounded-xl ${testResult === 'success' ? 'bg-emerald-500/20' : 'bg-rose-500/20'}`}>
-                {testResult === 'success' ? <Check className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-              </div>
-              <div className="space-y-1">
-                <div className="text-sm font-bold">{testResult === 'success' ? '连接测试成功' : '连接失败'}</div>
-                <p className="text-[10px] opacity-80 leading-relaxed">
-                  {testResult === 'success' ? '已成功握手，节点响应正常。' : '无法连接到指定节点。请检查地址或 Token。'}
-                </p>
-              </div>
-            </motion.div>
+              {feedback.text}
+            </motion.section>
           )}
         </AnimatePresence>
       </main>
 
-      <footer className="p-6 bg-[#121212]/90 backdrop-blur-xl border-t border-white/5 sticky bottom-0 z-20 space-y-4">
-        <button 
-          onClick={handleTest} 
-          disabled={isTesting || !nodeAddress} 
-          className="w-full h-14 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-white text-sm font-semibold rounded-2xl border border-white/10 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
-        >
-          {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4 text-emerald-500" />}
-          测试连接
-        </button>
-        <button 
-          onClick={handleConnect} 
-          disabled={isConnecting || !nodeAddress} 
-          className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-900/50 disabled:text-emerald-700 text-black font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/10"
-        >
-          {isConnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : '保存并开启同步'}
-        </button>
+      <footer className="border-t border-white/10 bg-[#111315] px-4 py-3">
+        <div className="flex gap-3">
+          <button
+            onClick={handleTest}
+            disabled={isTesting || isConnecting || !nodeAddress.trim()}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-white/10 text-sm text-slate-200 transition-colors hover:bg-white/5 disabled:opacity-40"
+          >
+            {isTesting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4 text-emerald-400" />}
+            测试连接
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={isConnecting || isTesting || !nodeAddress.trim()}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-emerald-500 text-sm font-medium text-black transition-colors hover:bg-emerald-400 disabled:opacity-40"
+          >
+            {isConnecting ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+            保存并连接
+          </button>
+        </div>
       </footer>
     </motion.div>
   );

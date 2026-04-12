@@ -28,7 +28,7 @@ async function executePendingAction(action: PendingAction) {
       await apiClient.deleteTodo(action.entityId);
       return;
     case 'clear-completed':
-      await apiClient.clearCompleted();
+      await apiClient.clearCompleted((action.data as { listId?: string } | undefined)?.listId);
       return;
     case 'create-list': {
       const listData = action.data as TodoList | undefined;

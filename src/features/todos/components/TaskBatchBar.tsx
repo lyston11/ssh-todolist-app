@@ -19,45 +19,46 @@ export const TaskBatchBar: React.FC<TaskBatchBarProps> = ({
 }) => {
   return (
     <motion.div
-      initial={{ y: 100 }}
-      animate={{ y: 0 }}
-      exit={{ y: 100 }}
-      className="fixed bottom-0 left-0 right-0 z-40 mx-auto flex w-full max-w-md items-center gap-3 border-t border-white/10 bg-[#1A1A1A] px-4 py-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ duration: 0.16, ease: 'easeOut' }}
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#111315]"
     >
-      <button
-        onClick={onCancel}
-        className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-400 transition-all active:scale-95"
-      >
-        <X className="h-5 w-5" />
-      </button>
-      <div className="flex-1 space-y-1">
-        <div className="text-xs font-bold text-white">已选中 {selectedCount} 项任务</div>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Batch Actions</div>
-      </div>
-      <div className="flex flex-[1.6] gap-2">
+      <div className="mx-auto flex w-full max-w-[520px] items-center gap-2 px-4 py-3">
+        <button
+          onClick={onCancel}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-white">已选中 {selectedCount} 项任务</div>
+          <div className="text-xs text-slate-400">可批量完成、移动或删除</div>
+        </div>
         <button
           onClick={onComplete}
           disabled={selectedCount === 0}
-          className="flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-white/5 bg-white/5 p-2 text-emerald-500 transition-all disabled:opacity-20 active:scale-95"
+          className="inline-flex h-9 items-center gap-1 rounded-md border border-white/10 px-3 text-sm text-emerald-300 transition-colors hover:bg-white/5 disabled:opacity-40"
         >
-          <Check className="h-5 w-5" />
-          <span className="text-[9px] font-bold uppercase tracking-widest">完成</span>
+          <Check className="h-4 w-4" />
+          完成
         </button>
         <button
           onClick={onMove}
           disabled={selectedCount === 0}
-          className="flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-white/5 bg-white/5 p-2 text-white transition-all disabled:opacity-20 active:scale-95"
+          className="inline-flex h-9 items-center gap-1 rounded-md border border-white/10 px-3 text-sm text-slate-200 transition-colors hover:bg-white/5 disabled:opacity-40"
         >
-          <Tag className="h-5 w-5" />
-          <span className="text-[9px] font-bold uppercase tracking-widest">移动</span>
+          <Tag className="h-4 w-4" />
+          移动
         </button>
         <button
           onClick={onDelete}
           disabled={selectedCount === 0}
-          className="flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-2 text-rose-500 transition-all disabled:opacity-20 active:scale-95"
+          className="inline-flex h-9 items-center gap-1 rounded-md border border-rose-400/20 px-3 text-sm text-rose-300 transition-colors hover:bg-rose-500/10 disabled:opacity-40"
         >
-          <Trash2 className="h-5 w-5" />
-          <span className="text-[9px] font-bold uppercase tracking-widest">删除</span>
+          <Trash2 className="h-4 w-4" />
+          删除
         </button>
       </div>
     </motion.div>

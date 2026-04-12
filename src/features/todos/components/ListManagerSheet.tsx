@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BottomSheet } from '../../../components/BottomSheet';
 import { TodoList } from '../../../types/api';
 
 interface ListManagerSheetProps {
@@ -85,130 +85,107 @@ export const ListManagerSheet: React.FC<ListManagerSheetProps> = ({
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="清单管理"
+      description="新增、重命名和删除任务清单，同时指定当前清单。"
+    >
+      <div className="space-y-4">
+        <div className="flex gap-3">
+          <input
+            value={newListTitle}
+            onChange={(event) => setNewListTitle(event.target.value)}
+            placeholder="新清单名称"
+            className="h-10 flex-1 rounded-lg border border-white/10 bg-[#1d2126] px-4 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-emerald-400/40"
           />
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 z-[60] mx-auto w-full max-w-md rounded-t-[32px] border-t border-white/10 bg-[#1A1A1A] p-6 pb-10"
+          <button
+            onClick={handleCreate}
+            disabled={isCreating || !newListTitle.trim()}
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-500 px-4 text-sm font-medium text-black transition-colors hover:bg-emerald-400 disabled:opacity-50"
           >
-            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-white/10" />
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white">清单管理</h3>
-                <p className="mt-1 text-[11px] text-slate-500">新增、重命名和删除任务清单，同时指定当前清单。</p>
-              </div>
-              <button onClick={onClose} className="rounded-xl bg-white/5 p-2 text-slate-400 transition-colors hover:text-white">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            <Plus className="h-4 w-4" />
+            新增
+          </button>
+        </div>
 
-            <div className="mb-5 flex gap-3">
-              <input
-                value={newListTitle}
-                onChange={(event) => setNewListTitle(event.target.value)}
-                placeholder="新清单名称"
-                className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-emerald-500/40"
-              />
-              <button
-                onClick={handleCreate}
-                disabled={isCreating || !newListTitle.trim()}
-                className="flex h-14 items-center gap-2 rounded-2xl bg-emerald-500 px-5 font-bold text-black transition-all disabled:opacity-50 active:scale-95"
+        <div className="space-y-3">
+          {lists.map((todoList) => {
+            const isEditing = editingListId === todoList.id;
+            const isBusy = busyListId === todoList.id;
+            const canDelete = lists.length > 1;
+            return (
+              <div
+                key={todoList.id}
+                className={`rounded-lg border p-3 transition-colors ${
+                  activeListId === todoList.id
+                    ? 'border-emerald-400/40 bg-emerald-500/10'
+                    : 'border-white/10 bg-[#1c2025]'
+                }`}
               >
-                <Plus className="h-4 w-4" />
-                新增
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {lists.map((todoList) => {
-                const isEditing = editingListId === todoList.id;
-                const isBusy = busyListId === todoList.id;
-                const canDelete = lists.length > 1;
-                return (
-                  <div
-                    key={todoList.id}
-                    className={`rounded-[24px] border p-4 transition-all ${
-                      activeListId === todoList.id
-                        ? 'border-emerald-500/30 bg-emerald-500/10'
-                        : 'border-white/5 bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {isEditing ? (
-                        <div className="flex flex-1 flex-col items-start text-left">
-                          <input
-                            autoFocus
-                            value={editingTitle}
-                            onChange={(event) => setEditingTitle(event.target.value)}
-                            className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-white outline-none transition-all focus:border-emerald-500/40"
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => onSelectList(todoList.id)}
-                          className="flex flex-1 flex-col items-start text-left"
-                        >
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white">{todoList.title}</span>
-                              {activeListId === todoList.id && (
-                                <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-black">
-                                  当前
-                                </span>
-                              )}
-                            </div>
-                              <span className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">List</span>
-                            </>
-                        </button>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        {isEditing ? (
-                          <button
-                            onClick={() => void handleRename(todoList.id)}
-                            disabled={isBusy || !editingTitle.trim()}
-                            className="rounded-xl bg-emerald-500/10 p-2 text-emerald-400 transition-colors disabled:opacity-40"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingListId(todoList.id);
-                              setEditingTitle(todoList.title);
-                            }}
-                            className="rounded-xl bg-white/5 p-2 text-slate-400 transition-colors hover:text-white"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => void handleDelete(todoList.id)}
-                          disabled={!canDelete || isBusy}
-                          className="rounded-xl bg-rose-500/10 p-2 text-rose-400 transition-colors disabled:opacity-30"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                <div className="flex items-start gap-3">
+                  {isEditing ? (
+                    <div className="flex flex-1 flex-col items-start text-left">
+                      <input
+                        autoFocus
+                        value={editingTitle}
+                        onChange={(event) => setEditingTitle(event.target.value)}
+                        className="h-10 w-full rounded-md border border-white/10 bg-[#111315] px-3 text-sm font-medium text-white outline-none transition-colors focus:border-emerald-400/40"
+                      />
                     </div>
+                  ) : (
+                    <button
+                      onClick={() => onSelectList(todoList.id)}
+                      className="flex flex-1 flex-col items-start text-left"
+                    >
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">{todoList.title}</span>
+                          {activeListId === todoList.id && (
+                            <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                              当前清单
+                            </span>
+                          )}
+                        </div>
+                        <span className="mt-1 text-xs text-slate-400">点击切换到这个清单</span>
+                      </>
+                    </button>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <button
+                        onClick={() => void handleRename(todoList.id)}
+                        disabled={isBusy || !editingTitle.trim()}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-emerald-300 transition-colors hover:bg-white/5 disabled:opacity-40"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingListId(todoList.id);
+                          setEditingTitle(todoList.title);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => void handleDelete(todoList.id)}
+                      disabled={!canDelete || isBusy}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-rose-400/20 text-rose-300 transition-colors hover:bg-rose-500/10 disabled:opacity-30"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </BottomSheet>
   );
 };

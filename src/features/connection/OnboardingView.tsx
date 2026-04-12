@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Check, Wifi, ShieldCheck, Settings, QrCode, Edit3, Activity } from 'lucide-react';
+import { Check, ChevronLeft, Edit3, QrCode, ShieldCheck, Wifi } from 'lucide-react';
 
 interface OnboardingViewProps {
   onBack: () => void;
@@ -13,75 +13,182 @@ interface OnboardingViewProps {
 export const OnboardingView: React.FC<OnboardingViewProps> = ({ onBack, onSettings, onNetwork, onScanImport, onFinish }) => {
   const [onboardingStep, setOnboardingStep] = useState(1);
 
+  const steps = useMemo(
+    () => [
+      {
+        id: 1,
+        title: '确认网络',
+        description: '先确认设备已经接入 Tailscale，后续连接才会稳定。',
+      },
+      {
+        id: 2,
+        title: '导入配置',
+        description: '填写节点地址和 token，或者直接扫码导入。',
+      },
+      {
+        id: 3,
+        title: '开始同步',
+        description: '配置完成后进入主界面，任务会在连接恢复后自动同步。',
+      },
+    ],
+    [],
+  );
+
   const nextStep = () => {
-    if (onboardingStep < 3) setOnboardingStep(onboardingStep + 1);
-    else onFinish();
+    if (onboardingStep < 3) {
+      setOnboardingStep((current) => current + 1);
+      return;
+    }
+    onFinish();
   };
 
   const prevStep = () => {
-    if (onboardingStep > 1) setOnboardingStep(onboardingStep - 1);
-    else onBack();
+    if (onboardingStep > 1) {
+      setOnboardingStep((current) => current - 1);
+      return;
+    }
+    onBack();
   };
 
   return (
-    <motion.div key="onboarding" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col max-w-md mx-auto w-full">
-      <header className="p-6 flex items-center justify-between border-b border-white/5 bg-[#121212]/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <button onClick={prevStep} className="p-2 -ml-2 hover:bg-white/5 rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-          <h1 className="text-lg font-semibold text-white">配置同步节点</h1>
-        </div>
-        <div className="flex flex-col items-end">
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Progress</span>
-          <span className="text-sm font-mono text-emerald-500">{onboardingStep}/3</span>
+    <motion.div
+      key="onboarding"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="mx-auto flex w-full max-w-[520px] flex-1 flex-col"
+    >
+      <header className="border-b border-white/10 bg-[#111315] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={prevStep}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h1 className="text-base font-semibold text-white">接入同步节点</h1>
+              <p className="mt-1 text-sm text-slate-400">按顺序完成网络确认、配置导入和同步启动。</p>
+            </div>
+          </div>
+          <div className="text-sm text-slate-400">{onboardingStep}/3</div>
         </div>
       </header>
-      <main className="flex-1 p-6 space-y-8 overflow-y-auto pb-32">
-        <div className={`relative pl-8 border-l-2 transition-colors ${onboardingStep >= 1 ? 'border-emerald-500/50' : 'border-white/10'}`}>
-          <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${onboardingStep > 1 ? 'bg-emerald-500 text-black' : onboardingStep === 1 ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/50' : 'bg-white/10 text-slate-500'}`}>{onboardingStep > 1 ? <Check className="w-3 h-3" /> : '1'}</div>
-          <div className={`space-y-4 ${onboardingStep === 1 ? 'opacity-100' : 'opacity-40'}`}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Wifi className="w-4 h-4 text-emerald-500" />网络环境准备</h3>
-            {onboardingStep === 1 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4">
-                <p className="text-xs text-slate-400 leading-relaxed">请确保 Tailscale 已开启并连接到你的私有网。这是建立安全隧道的先决条件。</p>
-                <button onClick={onNetwork} className="w-full py-3 bg-white/5 hover:bg-white/10 text-xs font-medium rounded-xl border border-white/10 transition-colors flex items-center justify-center gap-2"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />检测 Tailscale 状态</button>
-              </motion.div>
-            )}
-          </div>
-        </div>
-        <div className={`relative pl-8 border-l-2 transition-colors ${onboardingStep >= 2 ? 'border-emerald-500/50' : 'border-white/10'}`}>
-          <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${onboardingStep > 2 ? 'bg-emerald-500 text-black' : onboardingStep === 2 ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/50' : 'bg-white/10 text-slate-500'}`}>{onboardingStep > 2 ? <Check className="w-3 h-3" /> : '2'}</div>
-          <div className={`space-y-4 ${onboardingStep === 2 ? 'opacity-100' : 'opacity-40'}`}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Settings className="w-4 h-4 text-emerald-500" />导入节点配置</h3>
-            {onboardingStep === 2 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                <button onClick={onSettings} className="w-full p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-4 transition-colors group text-left">
-                  <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-500 group-hover:scale-110 transition-transform"><Edit3 className="w-6 h-6" /></div>
-                  <div><div className="text-sm font-semibold text-white">手动输入</div><div className="text-[10px] text-slate-500 uppercase tracking-tighter">IP / MagicDNS / Token</div></div>
+
+      <main className="flex-1 overflow-y-auto px-4 py-4 pb-24">
+        <section className="space-y-2">
+          {steps.map((step) => {
+            const active = step.id === onboardingStep;
+            const completed = step.id < onboardingStep;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setOnboardingStep(step.id)}
+                className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                  active
+                    ? 'border-emerald-400/40 bg-emerald-500/10'
+                    : 'border-white/10 bg-[#181b1f] hover:bg-white/5'
+                }`}
+              >
+                <div
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs ${
+                    completed
+                      ? 'border-emerald-400 bg-emerald-400 text-black'
+                      : active
+                        ? 'border-emerald-400/40 text-emerald-300'
+                        : 'border-white/10 text-slate-400'
+                  }`}
+                >
+                  {completed ? <Check className="h-3.5 w-3.5" /> : step.id}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">{step.title}</div>
+                  <div className="mt-1 text-sm text-slate-400">{step.description}</div>
+                </div>
+              </button>
+            );
+          })}
+        </section>
+
+        <section className="mt-4 rounded-xl border border-white/10 bg-[#181b1f] p-4">
+          {onboardingStep === 1 && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#111315] text-emerald-400">
+                  <Wifi className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-medium text-white">确认网络已准备好</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    确保当前设备已经登录 Tailscale，并且与服务端处于同一 tailnet。你可以在下一页手动填写 Tailscale IP。
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onNetwork}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 px-3 text-sm text-slate-200 transition-colors hover:bg-white/5"
+              >
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                打开网络诊断
+              </button>
+            </div>
+          )}
+
+          {onboardingStep === 2 && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-medium text-white">导入节点配置</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-400">可以手动填写地址和 token，也可以直接通过二维码导入。</p>
+              </div>
+              <div className="grid gap-2">
+                <button
+                  onClick={onSettings}
+                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#111315] px-4 py-3 text-left transition-colors hover:bg-white/5"
+                >
+                  <Edit3 className="h-4 w-4 text-emerald-400" />
+                  <div>
+                    <div className="text-sm font-medium text-white">手动填写</div>
+                    <div className="text-xs text-slate-400">输入节点地址和访问 token</div>
+                  </div>
                 </button>
-                <button onClick={onScanImport} className="w-full p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-4 transition-colors">
-                  <div className="p-3 bg-white/10 rounded-xl text-slate-400"><QrCode className="w-6 h-6" /></div>
-                  <div className="text-left"><div className="text-sm font-semibold text-white">扫码导入</div><div className="text-[10px] text-slate-500 uppercase tracking-tighter">Recommended</div></div>
+                <button
+                  onClick={onScanImport}
+                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#111315] px-4 py-3 text-left transition-colors hover:bg-white/5"
+                >
+                  <QrCode className="h-4 w-4 text-emerald-400" />
+                  <div>
+                    <div className="text-sm font-medium text-white">扫码导入</div>
+                    <div className="text-xs text-slate-400">从服务端配置页直接导入</div>
+                  </div>
                 </button>
-              </motion.div>
-            )}
-          </div>
-        </div>
-        <div className={`relative pl-8 transition-colors`}>
-          <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${onboardingStep === 3 ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/50' : 'bg-white/10 text-slate-500'}`}>3</div>
-          <div className={`space-y-4 ${onboardingStep === 3 ? 'opacity-100' : 'opacity-40'}`}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500" />建立同步链路</h3>
-            {onboardingStep === 3 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 bg-white/5 rounded-2xl border border-white/10 flex flex-col items-center gap-4 text-center">
-                <div className="relative"><div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" /><Activity className="w-12 h-12 text-emerald-500 relative z-10" /></div>
-                <div className="space-y-1"><p className="text-sm text-white font-medium">准备就绪</p><p className="text-xs text-slate-500">点击下方按钮验证并开启同步</p></div>
-              </motion.div>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          )}
+
+          {onboardingStep === 3 && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-medium text-white">准备进入主界面</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  连接成功后会进入主界面。之后任务会先保存在本地，再在网络可用时同步到服务端。
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-[#111315] px-4 py-3 text-sm text-slate-400">
+                如果当前还没连上服务，也可以先进入主界面，稍后再到设置页补充连接信息。
+              </div>
+            </div>
+          )}
+        </section>
       </main>
-      <footer className="p-6 bg-[#121212] border-t border-white/5 sticky bottom-0 z-20">
-        <button onClick={nextStep} className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-900 disabled:text-emerald-700 text-black font-semibold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-          {onboardingStep === 3 ? '开启同步之旅' : '下一步'}
+
+      <footer className="border-t border-white/10 bg-[#111315] px-4 py-3">
+        <button
+          onClick={nextStep}
+          className="inline-flex h-11 w-full items-center justify-center rounded-md bg-emerald-500 text-sm font-medium text-black transition-colors hover:bg-emerald-400"
+        >
+          {onboardingStep === 3 ? '进入主界面' : '继续'}
         </button>
       </footer>
     </motion.div>

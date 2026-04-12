@@ -6,6 +6,12 @@ import { normalizeServerUrl } from '../lib/connection';
 import { parseImportedConfig } from '../lib/import_config';
 import { createLocalNode, isLocalNode } from '../lib/nodes';
 import { RecentNode, storage } from '../lib/storage';
+import {
+  buildRecentRemoteNode,
+  mapConnectionCandidate,
+  mapSocketStatusToConnectionStatus,
+  resolveConnectionToken,
+} from './connectionModels';
 
 interface ConnectionContextType {
   status: ConnectionStatus;
@@ -31,30 +37,6 @@ function createId() {
   return typeof crypto?.randomUUID === 'function'
     ? crypto.randomUUID()
     : `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function mapCandidate(candidate: ConnectCandidate, authRequired: boolean, hasToken: boolean): Candidate {
-  const url = new URL(candidate.serverUrl);
-  const labelSource =
-    candidate.kind === 'tailscale'
-      ? 'Tailscale'
-      : candidate.kind === 'lan'
-        ? 'LAN'
-        : candidate.kind === 'public'
-          ? 'Public'
-          : candidate.kind;
-
-  return {
-    id: `${candidate.kind}:${candidate.serverUrl}`,
-    name: `${labelSource} · ${candidate.host}`,
-    ip: candidate.host,
-    serverUrl: candidate.serverUrl,
-    wsUrl: candidate.wsUrl,
-    kind: candidate.kind,
-    source: candidate.source,
-    status: authRequired && !hasToken ? 'needs-token' : 'connectable',
-    latency: url.port ? `${url.port}` : undefined,
-  };
 }
 
 export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -89,32 +71,19 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     realtimeSocket.onStatus((socketStatus) => {
-      if (socketStatus === 'connected') {
-        setStatus('online');
-        return;
-      }
-
-      if (socketStatus === 'reconnecting') {
-        setStatus('reconnecting');
-        return;
-      }
-
-      if (socketStatus === 'error') {
-        setStatus('node-unreachable');
-        return;
-      }
-
-      if (socketStatus === 'disconnected') {
-        setStatus((currentStatus) => (currentStatus === 'offline' ? currentStatus : 'offline'));
-      }
+      setStatus(mapSocketStatusToConnectionStatus(socketStatus));
     });
   }, []);
 
   const connect = useCallback(async (url: string, token?: string) => {
     const normalizedUrl = normalizeServerUrl(url);
     const explicitToken = token?.trim() || '';
-    const storedToken = storage.getRecentNodeToken(normalizedUrl) || '';
-    const initialToken = explicitToken || storedToken;
+    const initialToken = resolveConnectionToken({
+      explicitToken,
+      normalizedUrl,
+      resolvedServerUrl: normalizedUrl,
+      readStoredToken: storage.getRecentNodeToken,
+    });
 
     setStatus('reconnecting');
 
@@ -126,8 +95,12 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       const config = await apiClient.getConnectConfig();
       const resolvedServerUrl = config.serverUrl || normalizedUrl;
-      const resolvedStoredToken = storage.getRecentNodeToken(resolvedServerUrl) || '';
-      const normalizedToken = explicitToken || resolvedStoredToken || storedToken || initialToken;
+      const normalizedToken = resolveConnectionToken({
+        explicitToken,
+        normalizedUrl,
+        resolvedServerUrl,
+        readStoredToken: storage.getRecentNodeToken,
+      });
 
       apiClient.setBaseUrl(resolvedServerUrl);
       apiClient.setToken(normalizedToken || null);
@@ -139,20 +112,15 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const meta = await apiClient.getMeta();
       realtimeSocket.connect(config.wsUrl || meta.wsUrl, normalizedToken || undefined);
 
-      const newNode: RecentNode = {
+      const newNode: RecentNode = buildRecentRemoteNode({
         id: createId(),
-        kind: 'remote',
-        name: new URL(resolvedServerUrl).hostname,
-        ip: resolvedServerUrl,
-        lastUsed: new Date().toISOString(),
-        status: 'online',
-        latency: '...',
+        serverUrl: resolvedServerUrl,
         hasToken: Boolean(normalizedToken),
         authRequired: config.authRequired,
-      };
+      });
 
       setActiveNode(newNode);
-      setCandidates(meta.candidates.map((candidate) => mapCandidate(candidate, meta.authRequired, Boolean(normalizedToken))));
+      setCandidates(meta.candidates.map((candidate) => mapConnectionCandidate(candidate, meta.authRequired, Boolean(normalizedToken))));
       storage.saveRecentNode(newNode);
       storage.saveRecentNodeToken(normalizedUrl, normalizedToken || null);
       storage.saveRecentNodeToken(resolvedServerUrl, normalizedToken || null);
@@ -185,7 +153,7 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await connect(config.serverUrl, config.token);
     } catch (err) {
       console.error('Failed to import config:', err);
-      throw new Error('配置导入失败，请检查 JSON、config64 或导入链接格式');
+      throw new Error('配置导入失败，请检查 JSON、config/config64、导入链接或分享文本格式');
     }
   }, [connect]);
 
@@ -194,8 +162,12 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const client = new ApiClient();
       const normalizedUrl = normalizeServerUrl(url);
       const explicitToken = token?.trim() || '';
-      const storedToken = storage.getRecentNodeToken(normalizedUrl) || '';
-      const initialToken = explicitToken || storedToken;
+      const initialToken = resolveConnectionToken({
+        explicitToken,
+        normalizedUrl,
+        resolvedServerUrl: normalizedUrl,
+        readStoredToken: storage.getRecentNodeToken,
+      });
 
       client.setBaseUrl(normalizedUrl);
       client.setToken(initialToken || null);
@@ -203,7 +175,12 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await client.checkHealth();
       const config = await client.getConnectConfig();
       const resolvedServerUrl = config.serverUrl || normalizedUrl;
-      const normalizedToken = explicitToken || storage.getRecentNodeToken(resolvedServerUrl) || storedToken;
+      const normalizedToken = resolveConnectionToken({
+        explicitToken,
+        normalizedUrl,
+        resolvedServerUrl,
+        readStoredToken: storage.getRecentNodeToken,
+      });
 
       client.setBaseUrl(resolvedServerUrl);
       client.setToken(normalizedToken || null);
@@ -228,7 +205,7 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const meta = await apiClient.getMeta();
       setCandidates(
         meta.candidates.map((candidate) =>
-          mapCandidate(candidate, meta.authRequired, Boolean(sessionStorage.getItem(CURRENT_TOKEN_KEY))),
+          mapConnectionCandidate(candidate, meta.authRequired, Boolean(sessionStorage.getItem(CURRENT_TOKEN_KEY))),
         ),
       );
     } catch (err) {

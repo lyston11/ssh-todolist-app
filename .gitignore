@@ -1,6 +1,7 @@
 node_modules/
 dist/
 mobile/www/
+.gradle-home/
 frontend/__pycache__/
 .DS_Store
 .gradle-local/
