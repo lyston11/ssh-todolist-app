@@ -161,8 +161,8 @@ GitHub 自动发布：
 
 版本：
 
-- Android `versionName` 当前为 `1.00`
-- `package.json` 当前版本为 `1.0.0`
+- Android `versionName` 当前为 `1.0.1`
+- `package.json` 当前版本为 `1.0.1`
 
 正式签名：
 
